@@ -14,6 +14,7 @@ app.use((req, res, next) => {
 
 app.post('/ebay', async (req, res) => {
   try {
+    const body = { ...req.body, site_id: '0', currency_id: 'USD' };
     const response = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
       method: 'POST',
       headers: {
@@ -21,10 +22,19 @@ app.post('/ebay', async (req, res) => {
         'x-rapidapi-host': 'ebay-average-selling-price.p.rapidapi.com',
         'x-rapidapi-key': process.env.RAPID_KEY
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(body)
     });
     const data = await response.json();
-    console.log('RapidAPI full response:', JSON.stringify(data));
+    // Filter to USD only
+    if (data.products) {
+      data.products = data.products.filter(p => p.currency === 'USD' || p.currency === '$');
+      const usdPrices = data.products.map(p => parseFloat(p.sale_price)).filter(p => p > 0);
+      if (usdPrices.length > 0) {
+        data.average_price = usdPrices.reduce((a,b)=>a+b,0) / usdPrices.length;
+        data.results = usdPrices.length;
+      }
+    }
+    console.log('RapidAPI filtered response: avg=$' + (data.average_price||0).toFixed(2) + ' count=' + (data.results||0));
     res.json(data);
   } catch (err) {
     console.error('Error:', err.message);
