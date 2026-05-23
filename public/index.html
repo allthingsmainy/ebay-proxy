@@ -31,7 +31,9 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'SF Pro Display', sans-serif; overflow: hidden; }
+  
   .app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; max-width: 480px; margin: 0 auto; }
+  
   .header { padding: 52px 20px 16px; background: var(--bg); }
   .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .app-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
@@ -46,6 +48,7 @@
   .tab.active { background: var(--text); color: #000; border-color: var(--text); }
   .content { flex: 1; overflow-y: auto; padding: 0 20px 40px; -webkit-overflow-scrolling: touch; }
   .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  
   .label { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
   .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
   input[type=text], input[type=password] {
@@ -182,11 +185,16 @@
 <script>
 let inventory = [], scheduled = [], history = [], selectedVoice = null;
 let RAPID_KEY = localStorage.getItem('rapidKey') || '';
+// Init
 window.addEventListener('load', () => {
   populateVoices();
   if (RAPID_KEY) document.getElementById('rapidKeyInput').value = RAPID_KEY;
   const savedInv = localStorage.getItem('invSummary');
-  if (savedInv) { const s = JSON.parse(savedInv); inventory = s.items || []; updateInvPill(inventory.length); }
+  if (savedInv) {
+    const s = JSON.parse(savedInv);
+    inventory = s.items || [];
+    updateInvPill(inventory.length);
+  }
   const savedSched = localStorage.getItem('scheduled');
   if (savedSched) { scheduled = JSON.parse(savedSched); renderSched(); }
   const savedHistory = localStorage.getItem('scanHistory');
@@ -197,6 +205,7 @@ function saveRapidKey() {
   localStorage.setItem('rapidKey', RAPID_KEY);
   alert('Key saved!');
 }
+// Voice
 function populateVoices() {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return;
@@ -204,8 +213,13 @@ function populateVoices() {
   sel.innerHTML = '';
   const en = voices.filter(v => v.lang.startsWith('en'));
   const list = en.length ? en : voices;
-  list.forEach((v, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${v.name} (${v.lang})`; sel.appendChild(o); });
-  const pref = list.find(v => /samantha|karen|daniel|moira|siri/i.test(v.name)) || list.find(v => v.localService && v.lang === 'en-US') || list[0];
+  list.forEach((v, i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = `${v.name} (${v.lang})`;
+    sel.appendChild(o);
+  });
+  const pref = list.find(v => /samantha|karen|daniel|moira|siri/i.test(v.name))
+    || list.find(v => v.localService && v.lang === 'en-US') || list[0];
   sel.value = list.indexOf(pref) >= 0 ? list.indexOf(pref) : 0;
   selectedVoice = list[parseInt(sel.value)];
   sel.onchange = () => { selectedVoice = list[parseInt(sel.value)]; };
@@ -231,6 +245,7 @@ function playBuzz() {
     o.start(); o.stop(ctx.currentTime + 0.45);
   } catch(e) {}
 }
+// CSV
 function handleCSV(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -245,9 +260,11 @@ function handleCSV(e) {
   reader.readAsText(file);
 }
 function updateInvPill(count) {
-  document.getElementById('invPill').className = 'pill active';
+  const pill = document.getElementById('invPill');
+  pill.className = 'pill active';
   document.getElementById('invPillText').textContent = `${count} items`;
 }
+// Scheduled
 function addScheduled() {
   const val = document.getElementById('schedInput').value.trim().toUpperCase();
   if (!val || scheduled.includes(val)) return;
@@ -264,14 +281,20 @@ function removeScheduled(m) {
 function renderSched() {
   const el = document.getElementById('schedList');
   if (!scheduled.length) { el.innerHTML = ''; return; }
-  el.innerHTML = scheduled.map(m => `<div class="sched-item"><span style="font-family:monospace;font-size:13px;">${m}</span><button class="btn btn-sm" onclick="removeScheduled('${m}')">remove</button></div>`).join('');
+  el.innerHTML = scheduled.map(m => `
+    <div class="sched-item">
+      <span style="font-family:monospace;font-size:13px;">${m}</span>
+      <button class="btn btn-sm" onclick="removeScheduled('${m}')">remove</button>
+    </div>`).join('');
 }
+// Tabs
 function switchTab(tab) {
   ['scan','setup','history'].forEach((t,i) => {
     document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
     document.querySelectorAll('.tab')[i].className = 'tab'+(t===tab?' active':'');
   });
 }
+// Brand detection
 const BRANDS = [
   { p: /^AA59[-\s]?\d+/i, b: 'Samsung' }, { p: /^BN59[-\s]?\d+/i, b: 'Samsung' },
   { p: /^TM\d{4}/i, b: 'Samsung' }, { p: /^0{2,3}\d{2,3}[A-Z]$/i, b: 'Samsung' },
@@ -295,6 +318,7 @@ function formatModel(m) {
   const clean = m.toUpperCase().replace(/[-]/g,' ').replace(/\s+/g,' ').trim();
   return brand ? `${brand} ${clean}` : clean;
 }
+// eBay lookup via proxy server
 async function fetchEbayData(model) {
   try {
     const res = await fetch('https://ebay-proxy-nc6j.onrender.com/ebay', {
@@ -311,16 +335,28 @@ async function fetchEbayData(model) {
     const d = await res.json();
     console.log('eBay response:', JSON.stringify(d));
     if (!d || res.status >= 400) return null;
+
+    // ── FIX: read the field names the server actually sends ──────────────────
     const avgSoldPrice = parseFloat(d.avgSoldPrice || 0);
     const soldCount    = parseInt(d.soldCount    || 0, 10);
     const activeCount  = parseInt(d.activeCount  || 0, 10);
     const sellThru     = parseFloat(d.sellThru   || 0);
-    return { avgSoldPrice, soldCount, activeCount, totalCount: soldCount + activeCount, sellThru, hasData: d.hasData || avgSoldPrice > 0 || soldCount > 0 || activeCount > 0 };
+    // ────────────────────────────────────────────────────────────────────────
+
+    return {
+      avgSoldPrice,
+      soldCount,
+      activeCount,
+      totalCount: soldCount + activeCount,
+      sellThru,
+      hasData: d.hasData || avgSoldPrice > 0 || soldCount > 0 || activeCount > 0
+    };
   } catch(e) {
     console.error('eBay fetch error:', e);
     return null;
   }
 }
+// Main scan
 async function runScan() {
   const raw = document.getElementById('modelInput').value.trim();
   if (!raw) { alert('Enter a model number first'); return; }
@@ -329,15 +365,18 @@ async function runScan() {
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Checking eBay...';
   document.getElementById('resultBox').className = 'result-box hidden';
+  // Load voices if needed
   if (!window.speechSynthesis.getVoices().length) {
     await new Promise(r => { window.speechSynthesis.onvoiceschanged = r; setTimeout(r, 600); });
     populateVoices();
   }
+  // Check inventory first (instant)
   const matches = inventory.filter(i => i.title.toUpperCase().includes(model));
   const multiMatch = matches.find(i => i.qty > 1);
   const isScheduled = scheduled.includes(model);
   if (multiMatch) { fire('green','Multi-quantity', model, `Qty ${multiMatch.qty} listing in inventory`, 'multi'); reset(btn); return; }
   if (isScheduled) { fire('green','Scheduled', model, 'In your scheduled listings', 'new'); reset(btn); return; }
+  // eBay lookup
   const ebay = await fetchEbayData(model);
   let signal='red', label='Pass', sound='buzz', sub='';
   if (!ebay || !ebay.hasData) {
@@ -378,11 +417,22 @@ function fire(signal, label, model, sub, sound) {
   localStorage.setItem('scanHistory', JSON.stringify(history));
   renderHistory();
 }
-function reset(btn) { btn.disabled = false; btn.innerHTML = '⚡ Scan & Check'; }
+function reset(btn) {
+  btn.disabled = false;
+  btn.innerHTML = '⚡ Scan & Check';
+}
 function renderHistory() {
   const el = document.getElementById('historyList');
   if (!history.length) { el.innerHTML = '<div class="empty">No scans yet</div>'; return; }
-  el.innerHTML = history.map(h => `<div class="history-item"><div class="h-badge ${h.signal}">${h.signal==='green'?'✅':'❌'}</div><div style="flex:1;min-width:0;"><div class="h-model">${h.name}</div><div class="h-signal">${h.label} · ${h.sub}</div></div><div class="h-time">${h.time}</div></div>`).join('');
+  el.innerHTML = history.map(h => `
+    <div class="history-item">
+      <div class="h-badge ${h.signal}">${h.signal==='green'?'✅':'❌'}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="h-model">${h.name}</div>
+        <div class="h-signal">${h.label} · ${h.sub}</div>
+      </div>
+      <div class="h-time">${h.time}</div>
+    </div>`).join('');
 }
 document.getElementById('modelInput').addEventListener('keydown', e => { if (e.key==='Enter') runScan(); });
 </script>
