@@ -64,7 +64,7 @@ app.post('/ebay', async (req, res) => {
       body: JSON.stringify({
         keywords: searchKeywords,
         excluded_keywords: 'lot wholesale parts broken',
-        max_search_results: '60',
+        max_search_results: '240',
         remove_outliers: 'false',
         site_id: '0'
       })
@@ -145,7 +145,7 @@ app.post('/ebay', async (req, res) => {
     try {
       const token = await getEbayToken();
       const activeRes = await fetch(
-        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(searchKeywords.replace(/\s*remote\s*control$/i, "").trim())}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
+        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(keywords.replace(/^(denon|sony|samsung|lg|yamaha|panasonic|vizio|toshiba|philips|jvc|sanyo|magnavox|memorex|xfinity|dish)\s+/i, "").trim())}&category_ids=3676&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
         { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
       );
       const activeData = await activeRes.json();
