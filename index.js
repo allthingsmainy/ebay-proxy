@@ -27,7 +27,7 @@ app.post('/ebay', async (req, res) => {
   try {
     const { keywords } = req.body;
 
-    // Get sold data from RapidAPI - use their average_price directly (already USD)
+    // Get sold data from RapidAPI
     const soldRes = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
       method: 'POST',
       headers: {
@@ -39,15 +39,31 @@ app.post('/ebay', async (req, res) => {
         keywords,
         excluded_keywords: 'lot wholesale parts broken',
         max_search_results: '60',
-        remove_outliers: 'true',
+        remove_outliers: 'false',
         site_id: '0'
       })
     });
     const soldData = await soldRes.json();
-    const avgSoldPrice = parseFloat(soldData.average_price || 0);
+    console.log('RapidAPI response keys:', Object.keys(soldData));
+    console.log('average_price:', soldData.average_price, 'total_results:', soldData.total_results, 'results:', soldData.results);
+
+    // Use USD products only for avg price calculation
+    let avgSoldPrice = 0;
+    if (soldData.products && soldData.products.length > 0) {
+      const usdProducts = soldData.products.filter(p => p.currency === 'USD' || p.currency === '$');
+      if (usdProducts.length > 0) {
+        const prices = usdProducts.map(p => parseFloat(p.sale_price)).filter(p => p > 0);
+        avgSoldPrice = prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0;
+        console.log('USD products:', usdProducts.length, 'avg:', avgSoldPrice.toFixed(2));
+      } else {
+        // Fall back to API average_price if no USD products found
+        avgSoldPrice = parseFloat(soldData.average_price || 0);
+        console.log('No USD products, using API avg:', avgSoldPrice);
+      }
+    }
     const soldCount = parseInt(soldData.total_results || soldData.results || 0);
 
-    // Get active US-only listing count from eBay Browse API
+    // Get active US-only listing count
     let activeCount = 0;
     try {
       const token = await getEbayToken();
@@ -57,7 +73,6 @@ app.post('/ebay', async (req, res) => {
       );
       const activeData = await activeRes.json();
       activeCount = parseInt(activeData.total || 0);
-      console.log('Active raw total:', activeData.total);
     } catch(e) {
       console.log('Active count error:', e.message);
     }
