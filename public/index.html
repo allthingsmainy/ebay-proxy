@@ -366,7 +366,7 @@ async function fetchEbayData(model) {
     console.log('eBay raw response:', JSON.stringify(d));
     if (!d || res.status >= 400) return null;
     const avgPrice = parseFloat(d.average_price || d.averagePrice || d.avg_price || d.price || 0);
-    const soldCount = parseInt(d.item_count || d.itemCount || d.sold_count || d.soldCount || d.count || 0);
+    const soldCount = parseInt(d.results || d.total_results || d.item_count || d.itemCount || d.sold_count || d.soldCount || d.count || 0);
     const totalCount = parseInt(d.total_count || d.totalCount || d.total || soldCount || 0);
     return { avgSoldPrice: avgPrice, soldCount, totalCount, hasData: avgPrice > 0 || soldCount > 0 };
   } catch(e) {
