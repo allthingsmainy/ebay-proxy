@@ -326,8 +326,7 @@ async function fetchEbayData(model) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        const brand = detectBrand(model) || '';
-        keywords: (brand ? brand + ' ' + model : model + ' remote control'),
+        keywords: (detectBrand(model) ? detectBrand(model) + ' ' + model : model + ' remote control'),
         excluded_keywords: 'lot wholesale parts broken',
         max_search_results: '60',
         remove_outliers: 'false',
