@@ -123,6 +123,8 @@ app.post('/ebay', async (req, res) => {
         { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
       );
       const activeData = await activeRes.json();
+      console.log(`Active search keywords: ${keywords}`);
+      console.log(`Active count raw: ${activeData.total}`);
       activeCount = parseInt(activeData.total || 0, 10);
     } catch (e) {
       console.log('Active count error:', e.message);
