@@ -51,7 +51,7 @@ async function getActiveCount(searchTerm) {
       `&SECURITY-APPNAME=${process.env.EBAY_APP_ID}` +
       `&RESPONSE-DATA-FORMAT=JSON` +
       `&REST-PAYLOAD` +
-      `&keywords=${encodeURIComponent(searchTerm)}` +
+      `&keywords=${encodeURIComponent('"' + searchTerm + '"')}` +
       `&itemFilter(0).name=ListingType&itemFilter(0).value=FixedPrice` +
       `&itemFilter(1).name=Condition&itemFilter(1).value=Used` +
       `&itemFilter(2).name=LocatedIn&itemFilter(2).value=US` +
