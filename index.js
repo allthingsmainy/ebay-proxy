@@ -58,4 +58,33 @@ app.post('/ebay', async (req, res) => {
       const activeData = await activeRes.json();
       activeCount = parseInt(activeData.total || 0);
       console.log('Active raw total:', activeData.total);
-    } catch(e)
+    } catch(e) {
+      console.log('Active count error:', e.message);
+    }
+
+    const sellThru = activeCount > 0 ? soldCount / activeCount : (soldCount > 0 ? 999 : 0);
+
+    const result = {
+      avgSoldPrice: parseFloat(avgSoldPrice.toFixed(2)),
+      soldCount,
+      activeCount,
+      totalCount: soldCount + activeCount,
+      sellThru: parseFloat(sellThru.toFixed(4)),
+      hasData: soldCount > 0 || activeCount > 0
+    };
+
+    console.log(`Result: avg=$${result.avgSoldPrice} sold=${soldCount} active=${activeCount} sellThru=${(sellThru*100).toFixed(0)}%`);
+    res.json(result);
+  } catch (err) {
+    console.error('Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.use(express.static(path.join(process.cwd(), 'public')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
