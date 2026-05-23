@@ -31,9 +31,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'SF Pro Display', sans-serif; overflow: hidden; }
-  
   .app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; max-width: 480px; margin: 0 auto; }
-  
   .header { padding: 52px 20px 16px; background: var(--bg); }
   .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .app-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
@@ -43,17 +41,12 @@
   .pill .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); }
   .pill.active .dot { background: var(--green); }
   .pill.active { color: var(--text); }
-
   .tab-bar { display: flex; gap: 4px; padding: 0 20px 12px; }
   .tab { flex: 1; padding: 9px; font-size: 13px; font-weight: 500; border-radius: var(--radius-sm); text-align: center; cursor: pointer; border: 0.5px solid var(--border); background: var(--surface); color: var(--text2); transition: all 0.15s; }
   .tab.active { background: var(--text); color: #000; border-color: var(--text); }
-
   .content { flex: 1; overflow-y: auto; padding: 0 20px 40px; -webkit-overflow-scrolling: touch; }
-
   .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-  
   .label { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
-
   .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
   input[type=text], input[type=password] {
     flex: 1; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: var(--radius-sm);
@@ -62,19 +55,16 @@
   }
   input[type=text]:focus, input[type=password]:focus { border-color: var(--accent); }
   input[type=file] { display: none; }
-
   .btn { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px 18px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: var(--surface2); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; font-family: -apple-system, sans-serif; white-space: nowrap; }
   .btn:active { opacity: 0.7; }
   .btn-primary { background: var(--text); color: #000; border-color: var(--text); width: 100%; padding: 15px; font-size: 16px; border-radius: var(--radius); }
   .btn-primary:disabled { opacity: 0.35; }
   .btn-sm { font-size: 12px; padding: 8px 14px; }
-
   .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 24px; text-align: center; cursor: pointer; background: var(--surface); margin-bottom: 12px; transition: border-color 0.15s; }
   .upload-zone.loaded { border-color: var(--green); border-style: solid; background: var(--green-bg); }
   .upload-zone .icon { font-size: 32px; margin-bottom: 8px; }
   .upload-zone p { font-size: 13px; color: var(--text2); }
   .upload-zone.loaded p { color: var(--green-text); }
-
   .result-box { border-radius: var(--radius); padding: 32px 24px; text-align: center; margin-bottom: 12px; border: 0.5px solid var(--border); animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
   @keyframes popIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .result-box.green { background: var(--green-bg); border-color: var(--green-border); }
@@ -88,10 +78,8 @@
   .result-box.green .result-name { color: var(--green-text); }
   .result-box.red .result-name { color: var(--red-text); }
   .result-sub { font-size: 13px; margin-top: 10px; color: var(--text2); }
-
   .spinner { width: 18px; height: 18px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
   .history-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
   .history-item:last-child { border-bottom: none; }
   .h-badge { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -100,15 +88,12 @@
   .h-model { font-size: 14px; font-weight: 600; color: var(--text); }
   .h-signal { font-size: 11px; color: var(--text2); margin-top: 1px; }
   .h-time { font-size: 11px; color: var(--text3); margin-left: auto; flex-shrink: 0; }
-
   .sched-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
   .sched-item:last-child { border-bottom: none; }
-
   .voice-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
   .voice-row label { font-size: 12px; color: var(--text2); white-space: nowrap; }
   select { flex: 1; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; padding: 9px 12px; outline: none; -webkit-appearance: none; font-family: -apple-system, sans-serif; }
   .test-row { display: flex; gap: 8px; }
-
   .empty { text-align: center; padding: 32px 0; font-size: 13px; color: var(--text3); }
   .info-note { font-size: 11px; color: var(--text3); line-height: 1.6; margin-top: 8px; }
 </style>
@@ -129,7 +114,6 @@
       <div class="tab" onclick="switchTab('history')">History</div>
     </div>
   </div>
-
   <div class="content">
     <!-- SCANNER TAB -->
     <div id="tab-scan">
@@ -148,7 +132,6 @@
         <div class="result-sub" id="resultSub"></div>
       </div>
     </div>
-
     <!-- SETUP TAB -->
     <div id="tab-setup" style="display:none;">
       <div class="card">
@@ -159,7 +142,6 @@
         </div>
         <input type="file" id="csvFile" accept=".csv" onchange="handleCSV(event)" />
       </div>
-
       <div class="card">
         <div class="label">RapidAPI key</div>
         <div class="input-row" style="margin-bottom:10px;">
@@ -168,7 +150,6 @@
         <button class="btn" style="width:100%;" onclick="saveRapidKey()">✓ Save key</button>
         <p class="info-note">Your key is stored on this device only. Get it free at rapidapi.com — subscribe to "eBay Average Selling Price" by ecommet.</p>
       </div>
-
       <div class="card">
         <div class="label">Voice</div>
         <div class="voice-row">
@@ -180,7 +161,6 @@
           <button class="btn btn-sm" onclick="speak('New')">🔊 Test "New"</button>
         </div>
       </div>
-
       <div class="card">
         <div class="label">Scheduled listings</div>
         <p style="font-size:13px;color:var(--text2);margin-bottom:10px;">Add model numbers for remotes you have scheduled.</p>
@@ -191,7 +171,6 @@
         <div id="schedList"></div>
       </div>
     </div>
-
     <!-- HISTORY TAB -->
     <div id="tab-history" style="display:none;">
       <div class="card" id="historyList">
@@ -200,34 +179,24 @@
     </div>
   </div>
 </div>
-
 <script>
 let inventory = [], scheduled = [], history = [], selectedVoice = null;
 let RAPID_KEY = localStorage.getItem('rapidKey') || '';
-
-// Init
 window.addEventListener('load', () => {
   populateVoices();
   if (RAPID_KEY) document.getElementById('rapidKeyInput').value = RAPID_KEY;
   const savedInv = localStorage.getItem('invSummary');
-  if (savedInv) {
-    const s = JSON.parse(savedInv);
-    inventory = s.items || [];
-    updateInvPill(inventory.length);
-  }
+  if (savedInv) { const s = JSON.parse(savedInv); inventory = s.items || []; updateInvPill(inventory.length); }
   const savedSched = localStorage.getItem('scheduled');
   if (savedSched) { scheduled = JSON.parse(savedSched); renderSched(); }
   const savedHistory = localStorage.getItem('scanHistory');
   if (savedHistory) { history = JSON.parse(savedHistory); renderHistory(); }
 });
-
 function saveRapidKey() {
   RAPID_KEY = document.getElementById('rapidKeyInput').value.trim();
   localStorage.setItem('rapidKey', RAPID_KEY);
   alert('Key saved!');
 }
-
-// Voice
 function populateVoices() {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return;
@@ -235,19 +204,13 @@ function populateVoices() {
   sel.innerHTML = '';
   const en = voices.filter(v => v.lang.startsWith('en'));
   const list = en.length ? en : voices;
-  list.forEach((v, i) => {
-    const o = document.createElement('option');
-    o.value = i; o.textContent = `${v.name} (${v.lang})`;
-    sel.appendChild(o);
-  });
-  const pref = list.find(v => /samantha|karen|daniel|moira|siri/i.test(v.name))
-    || list.find(v => v.localService && v.lang === 'en-US') || list[0];
+  list.forEach((v, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${v.name} (${v.lang})`; sel.appendChild(o); });
+  const pref = list.find(v => /samantha|karen|daniel|moira|siri/i.test(v.name)) || list.find(v => v.localService && v.lang === 'en-US') || list[0];
   sel.value = list.indexOf(pref) >= 0 ? list.indexOf(pref) : 0;
   selectedVoice = list[parseInt(sel.value)];
   sel.onchange = () => { selectedVoice = list[parseInt(sel.value)]; };
 }
 window.speechSynthesis.onvoiceschanged = populateVoices;
-
 function speak(text) {
   try {
     window.speechSynthesis.cancel();
@@ -257,7 +220,6 @@ function speak(text) {
     window.speechSynthesis.speak(u);
   } catch(e) {}
 }
-
 function playBuzz() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -269,8 +231,6 @@ function playBuzz() {
     o.start(); o.stop(ctx.currentTime + 0.45);
   } catch(e) {}
 }
-
-// CSV
 function handleCSV(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -284,14 +244,10 @@ function handleCSV(e) {
   };
   reader.readAsText(file);
 }
-
 function updateInvPill(count) {
-  const pill = document.getElementById('invPill');
-  pill.className = 'pill active';
+  document.getElementById('invPill').className = 'pill active';
   document.getElementById('invPillText').textContent = `${count} items`;
 }
-
-// Scheduled
 function addScheduled() {
   const val = document.getElementById('schedInput').value.trim().toUpperCase();
   if (!val || scheduled.includes(val)) return;
@@ -308,22 +264,14 @@ function removeScheduled(m) {
 function renderSched() {
   const el = document.getElementById('schedList');
   if (!scheduled.length) { el.innerHTML = ''; return; }
-  el.innerHTML = scheduled.map(m => `
-    <div class="sched-item">
-      <span style="font-family:monospace;font-size:13px;">${m}</span>
-      <button class="btn btn-sm" onclick="removeScheduled('${m}')">remove</button>
-    </div>`).join('');
+  el.innerHTML = scheduled.map(m => `<div class="sched-item"><span style="font-family:monospace;font-size:13px;">${m}</span><button class="btn btn-sm" onclick="removeScheduled('${m}')">remove</button></div>`).join('');
 }
-
-// Tabs
 function switchTab(tab) {
   ['scan','setup','history'].forEach((t,i) => {
     document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
     document.querySelectorAll('.tab')[i].className = 'tab'+(t===tab?' active':'');
   });
 }
-
-// Brand detection
 const BRANDS = [
   { p: /^AA59[-\s]?\d+/i, b: 'Samsung' }, { p: /^BN59[-\s]?\d+/i, b: 'Samsung' },
   { p: /^TM\d{4}/i, b: 'Samsung' }, { p: /^0{2,3}\d{2,3}[A-Z]$/i, b: 'Samsung' },
@@ -347,8 +295,6 @@ function formatModel(m) {
   const clean = m.toUpperCase().replace(/[-]/g,' ').replace(/\s+/g,' ').trim();
   return brand ? `${brand} ${clean}` : clean;
 }
-
-// eBay lookup via RapidAPI
 async function fetchEbayData(model) {
   try {
     const res = await fetch('https://ebay-proxy-nc6j.onrender.com/ebay', {
@@ -358,26 +304,23 @@ async function fetchEbayData(model) {
         keywords: model + ' remote control',
         excluded_keywords: 'lot wholesale parts broken',
         max_search_results: '60',
-        remove_outliers: 'true',
+        remove_outliers: 'false',
         site_id: '0'
       })
     });
     const d = await res.json();
-    console.log('eBay raw response:', JSON.stringify(d));
+    console.log('eBay response:', JSON.stringify(d));
     if (!d || res.status >= 400) return null;
-    const avgPrice = parseFloat(d.average_price || d.averagePrice || d.avg_price || d.price || 0);
-    const soldCount = parseInt(d.soldCount || d.item_count || d.itemCount || d.sold_count || d.count || 0);
-    const activeCount = parseInt(d.activeCount || 0);
-    const totalCount = soldCount + activeCount;
-    const sellThru = activeCount > 0 ? soldCount / activeCount : (soldCount > 0 ? 999 : 0);
-    return { avgSoldPrice: avgPrice, soldCount, activeCount, totalCount, sellThru, hasData: avgPrice > 0 || soldCount > 0 || activeCount > 0 };
+    const avgSoldPrice = parseFloat(d.avgSoldPrice || 0);
+    const soldCount    = parseInt(d.soldCount    || 0, 10);
+    const activeCount  = parseInt(d.activeCount  || 0, 10);
+    const sellThru     = parseFloat(d.sellThru   || 0);
+    return { avgSoldPrice, soldCount, activeCount, totalCount: soldCount + activeCount, sellThru, hasData: d.hasData || avgSoldPrice > 0 || soldCount > 0 || activeCount > 0 };
   } catch(e) {
     console.error('eBay fetch error:', e);
     return null;
   }
 }
-
-// Main scan
 async function runScan() {
   const raw = document.getElementById('modelInput').value.trim();
   if (!raw) { alert('Enter a model number first'); return; }
@@ -386,31 +329,22 @@ async function runScan() {
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Checking eBay...';
   document.getElementById('resultBox').className = 'result-box hidden';
-
-  // Load voices if needed
   if (!window.speechSynthesis.getVoices().length) {
     await new Promise(r => { window.speechSynthesis.onvoiceschanged = r; setTimeout(r, 600); });
     populateVoices();
   }
-
-  // Check inventory first (instant)
   const matches = inventory.filter(i => i.title.toUpperCase().includes(model));
   const multiMatch = matches.find(i => i.qty > 1);
   const isScheduled = scheduled.includes(model);
-
   if (multiMatch) { fire('green','Multi-quantity', model, `Qty ${multiMatch.qty} listing in inventory`, 'multi'); reset(btn); return; }
   if (isScheduled) { fire('green','Scheduled', model, 'In your scheduled listings', 'new'); reset(btn); return; }
-
-  // eBay lookup
   const ebay = await fetchEbayData(model);
   let signal='red', label='Pass', sound='buzz', sub='';
-
   if (!ebay || !ebay.hasData) {
     signal='green'; label='New listing'; sound='new'; sub='No eBay listings found — untapped opportunity';
   } else {
-    const { avgSoldPrice, soldCount, activeCount: ebayActive, totalCount } = ebay;
-    const sellThru = ebay.sellThru || (ebay.activeCount > 0 ? soldCount / ebay.activeCount : (soldCount > 0 ? 999 : 0));
-    if (soldCount===0 && totalCount===0) {
+    const { avgSoldPrice, soldCount, activeCount: ebayActive, sellThru } = ebay;
+    if (soldCount===0 && ebay.totalCount===0) {
       signal='green'; label='New listing'; sound='new'; sub='No eBay listings found';
     } else if (soldCount>0 && avgSoldPrice>=20 && sellThru>=0.05) {
       signal='green'; label='New listing'; sound='new'; sub=`Avg sold $${avgSoldPrice.toFixed(2)} · ${(sellThru*100).toFixed(0)}% sell-through`;
@@ -418,18 +352,16 @@ async function runScan() {
       signal='green'; label='New listing'; sound='new'; sub=`Avg sold $${avgSoldPrice.toFixed(2)} · ${(sellThru*100).toFixed(0)}% sell-through`;
     } else if (soldCount===0 && avgSoldPrice>=50) {
       signal='green'; label='New listing'; sound='new'; sub=`Listed avg $${avgSoldPrice.toFixed(2)} · none sold yet`;
-    } else if (soldCount===0 && totalCount>0 && avgSoldPrice<50) {
+    } else if (soldCount===0 && ebay.totalCount>0 && avgSoldPrice<50) {
       signal='red'; label='Pass'; sound='buzz'; sub=`Listed avg $${avgSoldPrice.toFixed(2)} · none sold · under $50`;
     } else {
       signal='red'; label='Pass'; sound='buzz';
       sub = soldCount>0 ? `Avg sold $${avgSoldPrice.toFixed(2)} · ${(sellThru*100).toFixed(0)}% sell-through` : 'Does not meet criteria';
     }
   }
-
   fire(signal, label, model, sub, sound);
   reset(btn);
 }
-
 function fire(signal, label, model, sub, sound) {
   const name = formatModel(model);
   const box = document.getElementById('resultBox');
@@ -446,26 +378,12 @@ function fire(signal, label, model, sub, sound) {
   localStorage.setItem('scanHistory', JSON.stringify(history));
   renderHistory();
 }
-
-function reset(btn) {
-  btn.disabled = false;
-  btn.innerHTML = '⚡ Scan & Check';
-}
-
+function reset(btn) { btn.disabled = false; btn.innerHTML = '⚡ Scan & Check'; }
 function renderHistory() {
   const el = document.getElementById('historyList');
   if (!history.length) { el.innerHTML = '<div class="empty">No scans yet</div>'; return; }
-  el.innerHTML = history.map(h => `
-    <div class="history-item">
-      <div class="h-badge ${h.signal}">${h.signal==='green'?'✅':'❌'}</div>
-      <div style="flex:1;min-width:0;">
-        <div class="h-model">${h.name}</div>
-        <div class="h-signal">${h.label} · ${h.sub}</div>
-      </div>
-      <div class="h-time">${h.time}</div>
-    </div>`).join('');
+  el.innerHTML = history.map(h => `<div class="history-item"><div class="h-badge ${h.signal}">${h.signal==='green'?'✅':'❌'}</div><div style="flex:1;min-width:0;"><div class="h-model">${h.name}</div><div class="h-signal">${h.label} · ${h.sub}</div></div><div class="h-time">${h.time}</div></div>`).join('');
 }
-
 document.getElementById('modelInput').addEventListener('keydown', e => { if (e.key==='Enter') runScan(); });
 </script>
 </body>
