@@ -12,30 +12,71 @@ app.use((req, res, next) => {
   next();
 });
 
+async function getEbayToken() {
+  const credentials = Buffer.from(`${process.env.EBAY_APP_ID}:${process.env.EBAY_CERT_ID}`).toString('base64');
+  const r = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope'
+  });
+  const d = await r.json();
+  return d.access_token;
+}
+
 app.post('/ebay', async (req, res) => {
   try {
-    const body = { ...req.body, site_id: '0', currency_id: 'USD' };
-    const response = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
+    const { keywords } = req.body;
+
+    // Get sold data from RapidAPI
+    const soldBody = { ...req.body, site_id: '0', currency_id: 'USD' };
+    const soldRes = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-rapidapi-host': 'ebay-average-selling-price.p.rapidapi.com',
         'x-rapidapi-key': process.env.RAPID_KEY
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(soldBody)
     });
-    const data = await response.json();
+    const soldData = await soldRes.json();
+
     // Filter to USD only
-    if (data.products) {
-      data.products = data.products.filter(p => p.currency === 'USD' || p.currency === '$');
-      const usdPrices = data.products.map(p => parseFloat(p.sale_price)).filter(p => p > 0);
-      if (usdPrices.length > 0) {
-        data.average_price = usdPrices.reduce((a,b)=>a+b,0) / usdPrices.length;
-        data.results = usdPrices.length;
-      }
+    let avgSoldPrice = 0, soldCount = 0;
+    if (soldData.products) {
+      const usdProducts = soldData.products.filter(p => p.currency === 'USD' || p.currency === '$');
+      const usdPrices = usdProducts.map(p => parseFloat(p.sale_price)).filter(p => p > 0);
+      avgSoldPrice = usdPrices.length ? usdPrices.reduce((a,b)=>a+b,0)/usdPrices.length : 0;
+      soldCount = usdPrices.length;
     }
-    console.log('RapidAPI filtered response: avg=$' + (data.average_price||0).toFixed(2) + ' count=' + (data.results||0));
-    res.json(data);
+
+    // Get active listing count from eBay Browse API
+    let activeCount = 0;
+    try {
+      const token = await getEbayToken();
+      const activeRes = await fetch(
+        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(keywords)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D`,
+        { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
+      );
+      const activeData = await activeRes.json();
+      activeCount = parseInt(activeData.total || 0);
+    } catch(e) {
+      console.log('Active count failed:', e.message);
+    }
+
+    const sellThrough = (soldCount + activeCount) > 0 ? soldCount / (soldCount + activeCount) : 0;
+
+    const result = {
+      avgSoldPrice: parseFloat(avgSoldPrice.toFixed(2)),
+      soldCount,
+      activeCount,
+      avgActivePrice: 0,
+      totalCount: soldCount + activeCount,
+      hasData: soldCount > 0 || activeCount > 0,
+      sellThrough: parseFloat(sellThrough.toFixed(4))
+    };
+
+    console.log(`Result: avg=$${result.avgSoldPrice} sold=${soldCount} active=${activeCount} sellThru=${(sellThrough*100).toFixed(0)}%`);
+    res.json(result);
   } catch (err) {
     console.error('Error:', err.message);
     res.status(500).json({ error: err.message });
