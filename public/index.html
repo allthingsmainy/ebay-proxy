@@ -366,10 +366,11 @@ async function fetchEbayData(model) {
     console.log('eBay raw response:', JSON.stringify(d));
     if (!d || res.status >= 400) return null;
     const avgPrice = parseFloat(d.average_price || d.averagePrice || d.avg_price || d.price || 0);
-    const soldCount = parseInt(d.results || d.total_results || d.item_count || d.itemCount || d.sold_count || d.soldCount || d.count || 0);
-    const totalCount = parseInt(d.totalCount || d.total_count || d.totalCount || d.total || soldCount + (d.activeCount||0) || 0);
-    const sellThroughOverride = activeCount > 0 ? soldCount / activeCount : (soldCount > 0 ? 999 : 0);
-    return { avgSoldPrice: avgPrice, soldCount, totalCount, hasData: avgPrice > 0 || soldCount > 0 };
+    const soldCount = parseInt(d.soldCount || d.item_count || d.itemCount || d.sold_count || d.count || 0);
+    const activeCount = parseInt(d.activeCount || 0);
+    const totalCount = soldCount + activeCount;
+    const sellThru = activeCount > 0 ? soldCount / activeCount : (soldCount > 0 ? 999 : 0);
+    return { avgSoldPrice: avgPrice, soldCount, activeCount, totalCount, sellThru, hasData: avgPrice > 0 || soldCount > 0 || activeCount > 0 };
   } catch(e) {
     console.error('eBay fetch error:', e);
     return null;
@@ -407,8 +408,8 @@ async function runScan() {
   if (!ebay || !ebay.hasData) {
     signal='green'; label='New listing'; sound='new'; sub='No eBay listings found — untapped opportunity';
   } else {
-    const { avgSoldPrice, soldCount, totalCount } = ebay;
-    const sellThru = sellThroughOverride;
+    const { avgSoldPrice, soldCount, activeCount: ebayActive, totalCount } = ebay;
+    const sellThru = ebay.sellThru || (ebay.activeCount > 0 ? soldCount / ebay.activeCount : (soldCount > 0 ? 999 : 0));
     if (soldCount===0 && totalCount===0) {
       signal='green'; label='New listing'; sound='new'; sub='No eBay listings found';
     } else if (soldCount>0 && avgSoldPrice>=20 && sellThru>=0.05) {
