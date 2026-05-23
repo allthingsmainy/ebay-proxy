@@ -49,7 +49,7 @@ app.post('/ebay', async (req, res) => {
     }
     // Strip 'remote control' suffix if brand was added
     if (searchKeywords !== keywords) {
-      searchKeywords = searchKeywords.replace(/s*remote control$/i, '').trim();
+      searchKeywords = searchKeywords.replace(/\s*remote\s*control$/i, '').trim();
     }
     console.log(`Search keywords: ${searchKeywords}`);
 
