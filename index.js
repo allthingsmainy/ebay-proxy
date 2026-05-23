@@ -24,7 +24,6 @@ async function getEbayToken() {
 }
 
 function detectBrand(model) {
-  // Strip any leading brand word before testing the model pattern
   const m = model.toUpperCase()
     .replace(/^(DENON|SONY|SAMSUNG|LG|YAMAHA|PANASONIC|VIZIO|TOSHIBA|PHILIPS|JVC|SANYO|MAGNAVOX|MEMOREX|XFINITY|DISH)\s+/, '');
   if (/^RC[-\s]?\d{4}/.test(m)) return 'Denon';
@@ -40,25 +39,58 @@ function detectBrand(model) {
 }
 
 function normalizeModel(str) {
-  // Turn 'RC 1068' into 'RC-1068', 'RMT D197' into 'RMT-D197' etc
   return str.replace(/\b(RC|RMT|AKB|BN59|XRT|RAV|EUR|FSR|CT)\s(\w)/gi, '$1-$2');
+}
+
+// Scrape active listing count directly from eBay search page
+async function scrapeActiveCount(searchTerm) {
+  try {
+    const query = encodeURIComponent(searchTerm);
+    // LH_BIN=1 (Buy It Now), LH_ItemCondition=4 (Used), US only via LH_PrefLoc=1
+    const url = `https://www.ebay.com/sch/i.html?_nkw=${query}&LH_BIN=1&LH_ItemCondition=4&LH_PrefLoc=1`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    const html = await res.text();
+
+    // Try multiple patterns eBay uses for result count
+    const patterns = [
+      /(\d[\d,]+)\s+results?\s+for/i,
+      /srp-controls__count[^>]*>\s*<span[^>]*>([\d,]+)/,
+      /"totalCount"\s*:\s*(\d+)/,
+      /(\d[\d,]+)\s+listing/i,
+    ];
+
+    for (const p of patterns) {
+      const m = html.match(p);
+      if (m) {
+        const count = parseInt(m[1].replace(/,/g, ''), 10);
+        if (!isNaN(count)) {
+          console.log(`Scraped active count: ${count} (pattern: ${p})`);
+          return count;
+        }
+      }
+    }
+    console.log('Could not parse count from eBay page, HTML length:', html.length);
+    return null;
+  } catch (e) {
+    console.log('Scrape error:', e.message);
+    return null;
+  }
 }
 
 app.post('/ebay', async (req, res) => {
   try {
     const { keywords } = req.body;
 
-    // Clean: strip 'remote control' suffix
     const modelClean = keywords.replace(/\s*remote\s*control$/i, '').trim();
-
-    // Detect brand (handles both 'RC 1068' and 'DENON RC 1068')
     const brand = detectBrand(modelClean);
-
-    // Build branded search (avoid double-adding brand)
     const hasBrand = brand && modelClean.toUpperCase().startsWith(brand.toUpperCase());
     const brandedSearch = (brand && !hasBrand) ? `${brand} ${modelClean}` : modelClean;
-
-    // Normalize hyphens for active search: 'DENON RC 1068' -> 'DENON RC-1068'
     const activeSearch = normalizeModel(brandedSearch);
 
     console.log(`Model: "${modelClean}" | Brand: ${brand} | Active search: "${activeSearch}"`);
@@ -81,13 +113,11 @@ app.post('/ebay', async (req, res) => {
     });
     const soldData = await soldRes.json();
 
-    // ── Resolve items array ───────────────────────────────────────────────────
     const itemsArray = Array.isArray(soldData.products) ? soldData.products
                      : Array.isArray(soldData.results)  ? soldData.results
                      : Array.isArray(soldData.items)    ? soldData.items
                      : [];
 
-    // ── Sold count ────────────────────────────────────────────────────────────
     const soldCount = (() => {
       const raw = soldData.total_results ?? soldData.totalResults ?? soldData.total;
       if (raw !== undefined && raw !== null) {
@@ -97,7 +127,6 @@ app.post('/ebay', async (req, res) => {
       return itemsArray.length;
     })();
 
-    // ── Average sold price (USD only) ─────────────────────────────────────────
     let avgSoldPrice = 0;
     if (itemsArray.length > 0) {
       const usdItems = itemsArray.filter(p => {
@@ -116,22 +145,27 @@ app.post('/ebay', async (req, res) => {
 
     console.log(`Sold: ${soldCount} | Avg: $${avgSoldPrice.toFixed(2)}`);
 
-    // ── Active listing count ──────────────────────────────────────────────────
+    // ── Active count — scrape eBay search page ────────────────────────────────
     let activeCount = 0;
-    try {
-      const token = await getEbayToken();
-      const activeRes = await fetch(
-        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(activeSearch)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
-        { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
-      );
-      const activeData = await activeRes.json();
-      activeCount = parseInt(activeData.total || 0, 10);
-      console.log(`Active search: "${activeSearch}" | Count: ${activeCount}`);
-    } catch (e) {
-      console.log('Active count error:', e.message);
+    const scraped = await scrapeActiveCount(activeSearch);
+    if (scraped !== null) {
+      activeCount = scraped;
+    } else {
+      // Fallback to Browse API if scrape fails
+      try {
+        const token = await getEbayToken();
+        const activeRes = await fetch(
+          `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(activeSearch)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
+          { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
+        );
+        const activeData = await activeRes.json();
+        activeCount = parseInt(activeData.total || 0, 10);
+        console.log(`Browse API fallback count: ${activeCount}`);
+      } catch (e) {
+        console.log('Browse API fallback error:', e.message);
+      }
     }
 
-    // ── Sell-through rate ─────────────────────────────────────────────────────
     const sellThru = activeCount > 0 ? soldCount / activeCount
                    : soldCount > 0   ? 999
                    : 0;
