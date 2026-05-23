@@ -42,43 +42,32 @@ function normalizeModel(str) {
   return str.replace(/\b(RC|RMT|AKB|BN59|XRT|RAV|EUR|FSR|CT)\s(\w)/gi, '$1-$2');
 }
 
-// Scrape active listing count directly from eBay search page
-async function scrapeActiveCount(searchTerm) {
+// Get active listing count using eBay Finding API
+async function getActiveCount(searchTerm) {
   try {
-    const query = encodeURIComponent(searchTerm);
-    // LH_BIN=1 (Buy It Now), LH_ItemCondition=4 (Used), US only via LH_PrefLoc=1
-    const url = `https://www.ebay.com/sch/i.html?_nkw=${query}&LH_BIN=1&LH_ItemCondition=4&LH_PrefLoc=1`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
-    });
-    const html = await res.text();
+    const url = `https://svcs.ebay.com/services/search/FindingService/v1` +
+      `?OPERATION-NAME=findItemsAdvanced` +
+      `&SERVICE-VERSION=1.0.0` +
+      `&SECURITY-APPNAME=${process.env.EBAY_APP_ID}` +
+      `&RESPONSE-DATA-FORMAT=JSON` +
+      `&REST-PAYLOAD` +
+      `&keywords=${encodeURIComponent(searchTerm)}` +
+      `&itemFilter(0).name=ListingType&itemFilter(0).value=FixedPrice` +
+      `&itemFilter(1).name=Condition&itemFilter(1).value=Used` +
+      `&itemFilter(2).name=LocatedIn&itemFilter(2).value=US` +
+      `&paginationInput.entriesPerPage=1` +
+      `&paginationInput.pageNumber=1`;
 
-    // Try multiple patterns eBay uses for result count
-    const patterns = [
-      /(\d[\d,]+)\s+results?\s+for/i,
-      /srp-controls__count[^>]*>\s*<span[^>]*>([\d,]+)/,
-      /"totalCount"\s*:\s*(\d+)/,
-      /(\d[\d,]+)\s+listing/i,
-    ];
-
-    for (const p of patterns) {
-      const m = html.match(p);
-      if (m) {
-        const count = parseInt(m[1].replace(/,/g, ''), 10);
-        if (!isNaN(count)) {
-          console.log(`Scraped active count: ${count} (pattern: ${p})`);
-          return count;
-        }
-      }
-    }
-    console.log('Could not parse count from eBay page, HTML length:', html.length);
-    return null;
+    const res = await fetch(url);
+    const data = await res.json();
+    const total = parseInt(
+      data?.findItemsAdvancedResponse?.[0]?.paginationOutput?.[0]?.totalEntries?.[0] || 0,
+      10
+    );
+    console.log(`Finding API active count for "${searchTerm}": ${total}`);
+    return total;
   } catch (e) {
-    console.log('Scrape error:', e.message);
+    console.log('Finding API error:', e.message);
     return null;
   }
 }
@@ -145,26 +134,8 @@ app.post('/ebay', async (req, res) => {
 
     console.log(`Sold: ${soldCount} | Avg: $${avgSoldPrice.toFixed(2)}`);
 
-    // ── Active count — scrape eBay search page ────────────────────────────────
-    let activeCount = 0;
-    const scraped = await scrapeActiveCount(activeSearch);
-    if (scraped !== null) {
-      activeCount = scraped;
-    } else {
-      // Fallback to Browse API if scrape fails
-      try {
-        const token = await getEbayToken();
-        const activeRes = await fetch(
-          `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(activeSearch)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
-          { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
-        );
-        const activeData = await activeRes.json();
-        activeCount = parseInt(activeData.total || 0, 10);
-        console.log(`Browse API fallback count: ${activeCount}`);
-      } catch (e) {
-        console.log('Browse API fallback error:', e.message);
-      }
-    }
+    // ── Active count via Finding API ──────────────────────────────────────────
+    let activeCount = await getActiveCount(activeSearch) ?? 0;
 
     const sellThru = activeCount > 0 ? soldCount / activeCount
                    : soldCount > 0   ? 999
