@@ -367,7 +367,8 @@ async function fetchEbayData(model) {
     if (!d || res.status >= 400) return null;
     const avgPrice = parseFloat(d.average_price || d.averagePrice || d.avg_price || d.price || 0);
     const soldCount = parseInt(d.results || d.total_results || d.item_count || d.itemCount || d.sold_count || d.soldCount || d.count || 0);
-    const totalCount = parseInt(d.total_count || d.totalCount || d.total || soldCount || 0);
+    const totalCount = parseInt(d.totalCount || d.total_count || d.totalCount || d.total || soldCount + (d.activeCount||0) || 0);
+    const sellThroughOverride = d.sellThrough || null;
     return { avgSoldPrice: avgPrice, soldCount, totalCount, hasData: avgPrice > 0 || soldCount > 0 };
   } catch(e) {
     console.error('eBay fetch error:', e);
@@ -407,7 +408,7 @@ async function runScan() {
     signal='green'; label='New listing'; sound='new'; sub='No eBay listings found — untapped opportunity';
   } else {
     const { avgSoldPrice, soldCount, totalCount } = ebay;
-    const sellThru = totalCount > 0 ? soldCount / totalCount : 0;
+    const sellThru = sellThroughOverride !== null ? sellThroughOverride : (totalCount > 0 ? soldCount / totalCount : 0);
     if (soldCount===0 && totalCount===0) {
       signal='green'; label='New listing'; sound='new'; sub='No eBay listings found';
     } else if (soldCount>0 && avgSoldPrice>=20 && sellThru>=0.05) {
