@@ -23,34 +23,47 @@ async function getEbayToken() {
   return d.access_token;
 }
 
-// Detect brand from model number
 function detectBrand(model) {
-  const m = model.toUpperCase();
+  // Strip any leading brand word before testing the model pattern
+  const m = model.toUpperCase()
+    .replace(/^(DENON|SONY|SAMSUNG|LG|YAMAHA|PANASONIC|VIZIO|TOSHIBA|PHILIPS|JVC|SANYO|MAGNAVOX|MEMOREX|XFINITY|DISH)\s+/, '');
   if (/^RC[-\s]?\d{4}/.test(m)) return 'Denon';
-  if (/^(AA59|BN59|TM\d{4})/.test(m)) return 'Samsung';
+  if (/^(AA59|BN59)[-\s]?\d+/.test(m)) return 'Samsung';
+  if (/^TM\d{4}/.test(m)) return 'Samsung';
   if (/^(RMT|RM-)/.test(m)) return 'Sony';
   if (/^(AKB|AGF|MKJ)\d+/.test(m)) return 'LG';
   if (/^(FSR|RAV)\d+/.test(m)) return 'Yamaha';
   if (/^EUR\d+/.test(m)) return 'Panasonic';
   if (/^XRT\d+/.test(m)) return 'Vizio';
-  if (/^CT-?\d+/.test(m)) return 'Toshiba';
+  if (/^CT[-\s]?\d+/.test(m)) return 'Toshiba';
   return null;
+}
+
+function normalizeModel(str) {
+  // Turn 'RC 1068' into 'RC-1068', 'RMT D197' into 'RMT-D197' etc
+  return str.replace(/\b(RC|RMT|AKB|BN59|XRT|RAV|EUR|FSR|CT)\s(\w)/gi, '$1-$2');
 }
 
 app.post('/ebay', async (req, res) => {
   try {
     const { keywords } = req.body;
 
-    // Strip 'remote control' suffix to get clean model string
+    // Clean: strip 'remote control' suffix
     const modelClean = keywords.replace(/\s*remote\s*control$/i, '').trim();
 
-    // Detect brand and build branded search term
+    // Detect brand (handles both 'RC 1068' and 'DENON RC 1068')
     const brand = detectBrand(modelClean);
-    const brandedSearch = brand ? `${brand} ${modelClean}` : modelClean;
 
-    console.log(`Model: ${modelClean} | Brand: ${brand} | Branded: ${brandedSearch}`);
+    // Build branded search (avoid double-adding brand)
+    const hasBrand = brand && modelClean.toUpperCase().startsWith(brand.toUpperCase());
+    const brandedSearch = (brand && !hasBrand) ? `${brand} ${modelClean}` : modelClean;
 
-    // ── RapidAPI sold data — use original keywords for broadest results ────────
+    // Normalize hyphens for active search: 'DENON RC 1068' -> 'DENON RC-1068'
+    const activeSearch = normalizeModel(brandedSearch);
+
+    console.log(`Model: "${modelClean}" | Brand: ${brand} | Active search: "${activeSearch}"`);
+
+    // ── RapidAPI sold data ────────────────────────────────────────────────────
     const soldRes = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
       method: 'POST',
       headers: {
@@ -94,28 +107,26 @@ app.post('/ebay', async (req, res) => {
       const prices = usdItems
         .map(p => parseFloat(p.sale_price ?? p.price ?? p.sold_price ?? 0))
         .filter(p => !isNaN(p) && p > 0);
-      if (prices.length > 0) {
-        avgSoldPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-      } else {
-        avgSoldPrice = parseFloat(soldData.average_price || 0);
-      }
+      avgSoldPrice = prices.length
+        ? prices.reduce((a, b) => a + b, 0) / prices.length
+        : parseFloat(soldData.average_price || 0);
     } else {
       avgSoldPrice = parseFloat(soldData.average_price || 0);
     }
 
     console.log(`Sold: ${soldCount} | Avg: $${avgSoldPrice.toFixed(2)}`);
 
-    // ── Active listing count — use branded model, no 'remote control' ─────────
+    // ── Active listing count ──────────────────────────────────────────────────
     let activeCount = 0;
     try {
       const token = await getEbayToken();
       const activeRes = await fetch(
-        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(brandedSearch)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
+        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(activeSearch)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
         { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
       );
       const activeData = await activeRes.json();
       activeCount = parseInt(activeData.total || 0, 10);
-      console.log(`Active search: "${brandedSearch}" | Count: ${activeCount}`);
+      console.log(`Active search: "${activeSearch}" | Count: ${activeCount}`);
     } catch (e) {
       console.log('Active count error:', e.message);
     }
