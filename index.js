@@ -14,16 +14,13 @@ app.use((req, res, next) => {
 
 async function getEbayToken() {
   const credentials = Buffer.from(`${process.env.EBAY_APP_ID}:${process.env.EBAY_CERT_ID}`).toString('base64');
-  const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+  const r = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
     method: 'POST',
-    headers: {
-      'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
+    headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope'
   });
-  const data = await response.json();
-  return data.access_token;
+  const d = await r.json();
+  return d.access_token;
 }
 
 app.post('/ebay', async (req, res) => {
@@ -31,50 +28,42 @@ app.post('/ebay', async (req, res) => {
     const { keywords } = req.body;
     const token = await getEbayToken();
     const encoded = encodeURIComponent(keywords);
+    const headers = { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' };
 
     // Active listings
     const activeRes = await fetch(
       `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encoded}&limit=50&filter=buyingOptions:%7BFIXED_PRICE%7D`,
-      { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
+      { headers }
     );
     const activeData = await activeRes.json();
     const activeItems = activeData.itemSummaries || [];
     const activePrices = activeItems.map(i => parseFloat(i.price?.value || 0)).filter(p => p > 0);
     const avgActivePrice = activePrices.length ? activePrices.reduce((a,b)=>a+b,0)/activePrices.length : 0;
 
-    // Sold listings using Finding API with correct parameters
-    const appId = process.env.EBAY_APP_ID;
-    const findingUrl = `https://svcs.ebay.com/services/search/FindingService/v1` +
-      `?OPERATION-NAME=findCompletedItems` +
-      `&SERVICE-VERSION=1.0.0` +
-      `&SECURITY-APPNAME=${appId}` +
-      `&RESPONSE-DATA-FORMAT=JSON` +
-      `&keywords=${encoded}` +
-      `&itemFilter%280%29.name=SoldItemsOnly&itemFilter%280%29.value=true` +
-      `&itemFilter%281%29.name=ListingType&itemFilter%281%29.value=FixedPrice` +
-      `&paginationInput.entriesPerPage=100` +
-      `&sortOrder=EndTimeSoonest`;
-
-    const findingRes = await fetch(findingUrl);
-    const findingData = await findingRes.json();
-    console.log('Finding API raw:', JSON.stringify(findingData).substring(0, 500));
-
-    const searchResult = findingData?.findCompletedItemsResponse?.[0]?.searchResult?.[0];
-    const soldItems = searchResult?.item || [];
-    const totalSold = parseInt(findingData?.findCompletedItemsResponse?.[0]?.paginationOutput?.[0]?.totalEntries?.[0] || soldItems.length);
-    const soldPrices = soldItems.map(i => parseFloat(i.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0)).filter(p => p > 0);
+    // Sold listings using Browse API with lastSoldDate filter
+    const soldRes = await fetch(
+      `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encoded}&limit=50&filter=buyingOptions:%7BFIXED_PRICE%7D,soldItems:true`,
+      { headers }
+    );
+    const soldData = await soldRes.json();
+    const soldItems = soldData.itemSummaries || [];
+    const soldPrices = soldItems.map(i => parseFloat(i.price?.value || 0)).filter(p => p > 0);
     const avgSoldPrice = soldPrices.length ? soldPrices.reduce((a,b)=>a+b,0)/soldPrices.length : 0;
 
-    console.log('Active:', activeItems.length, 'avgActive:', avgActivePrice.toFixed(2));
-    console.log('Sold items returned:', soldItems.length, 'totalSold:', totalSold, 'avgSold:', avgSoldPrice.toFixed(2));
+    // Calculate sell-through using total from API if available
+    const totalActive = parseInt(activeData.total || activeItems.length);
+    const totalSold = parseInt(soldData.total || soldItems.length);
+
+    console.log('Active:', activeItems.length, 'total:', totalActive, 'avg:', avgActivePrice.toFixed(2));
+    console.log('Sold:', soldItems.length, 'total:', totalSold, 'avg:', avgSoldPrice.toFixed(2));
 
     const result = {
       avgSoldPrice: parseFloat(avgSoldPrice.toFixed(2)),
       soldCount: totalSold,
-      activeCount: activeItems.length,
+      activeCount: totalActive,
       avgActivePrice: parseFloat(avgActivePrice.toFixed(2)),
-      totalCount: activeItems.length + totalSold,
-      hasData: activeItems.length > 0 || totalSold > 0
+      totalCount: totalActive + totalSold,
+      hasData: totalActive > 0 || totalSold > 0
     };
 
     console.log('Result:', JSON.stringify(result));
