@@ -27,6 +27,32 @@ app.post('/ebay', async (req, res) => {
   try {
     const { keywords } = req.body;
 
+    // Add brand prefix if not already present
+    const BRAND_PATTERNS = [
+      { p: /^(Denons+)?RC-?d{4}/i, b: 'Denon' },
+      { p: /^(Samsungs+)?(AA59|BN59)[-s]?d+/i, b: 'Samsung' },
+      { p: /^(Sonys+)?(RMT|RM-)/i, b: 'Sony' },
+      { p: /^(LGs+)?(AKB|AGF|MKJ)d+/i, b: 'LG' },
+      { p: /^(Yamahas+)?(FSR|RAV)d+/i, b: 'Yamaha' },
+      { p: /^(Panasonics+)?(EUR)d+/i, b: 'Panasonic' },
+      { p: /^(Vizios+)?XRTd+/i, b: 'Vizio' },
+    ];
+    let searchKeywords = keywords;
+    const alreadyHasBrand = BRAND_PATTERNS.some(e => e.p.test(keywords));
+    if (!alreadyHasBrand) {
+      for (const e of BRAND_PATTERNS) {
+        if (e.p.test(keywords.replace(/^w+s+/, ''))) {
+          searchKeywords = e.b + ' ' + keywords;
+          break;
+        }
+      }
+    }
+    // Strip 'remote control' suffix if brand was added
+    if (searchKeywords !== keywords) {
+      searchKeywords = searchKeywords.replace(/s*remote control$/i, '').trim();
+    }
+    console.log(`Search keywords: ${searchKeywords}`);
+
     // ── RapidAPI call ─────────────────────────────────────────────────────────
     const soldRes = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
       method: 'POST',
@@ -36,7 +62,7 @@ app.post('/ebay', async (req, res) => {
         'x-rapidapi-key': process.env.RAPID_KEY
       },
       body: JSON.stringify({
-        keywords,
+        keywords: searchKeywords,
         excluded_keywords: 'lot wholesale parts broken',
         max_search_results: '60',
         remove_outliers: 'false',
@@ -119,11 +145,11 @@ app.post('/ebay', async (req, res) => {
     try {
       const token = await getEbayToken();
       const activeRes = await fetch(
-        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(keywords)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
+        `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(searchKeywords)}&limit=1&filter=buyingOptions:%7BFIXED_PRICE%7D,itemLocationCountry:US`,
         { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
       );
       const activeData = await activeRes.json();
-      console.log(`Active search keywords: ${keywords}`);
+      console.log(`Active search keywords: ${searchKeywords}`);
       console.log(`Active count raw: ${activeData.total}`);
       activeCount = parseInt(activeData.total || 0, 10);
     } catch (e) {
