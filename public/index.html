@@ -309,6 +309,7 @@ const BRANDS = [
   { p: /^XRT\d+/i, b: 'Vizio' }, { p: /^MVD\d+/i, b: 'Memorex' },
   { p: /^BW\d+/i, b: 'Bionaire' }, { p: /^SUN\d+/i, b: 'DeLonghi' },
   { p: /^A\d{4}$/i, b: 'Apple' },
+  { p: /^RC-?\d{4}/i, b: 'Denon' },
   { p: /^RC\d{2}[A-Z]{0,2}$/i, b: 'DirecTV' }, { p: /^RC8[0-9]/i, b: 'DirecTV' },
   { p: /^XR\d+/i, b: 'Xfinity' }, { p: /^21\d{4}/i, b: 'Dish' },
 ];
@@ -325,7 +326,8 @@ async function fetchEbayData(model) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        keywords: model + ' remote control',
+        const brand = detectBrand(model) || '';
+        keywords: (brand ? brand + ' ' + model : model + ' remote control'),
         excluded_keywords: 'lot wholesale parts broken',
         max_search_results: '60',
         remove_outliers: 'false',
