@@ -27,7 +27,7 @@ app.post('/ebay', async (req, res) => {
   try {
     const { keywords } = req.body;
 
-    // Get sold data from RapidAPI
+    // ── RapidAPI call ─────────────────────────────────────────────────────────
     const soldRes = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
       method: 'POST',
       headers: {
@@ -44,26 +44,77 @@ app.post('/ebay', async (req, res) => {
       })
     });
     const soldData = await soldRes.json();
-    console.log('RapidAPI response keys:', Object.keys(soldData));
-    console.log('average_price:', soldData.average_price, 'total_results:', soldData.total_results, 'results:', soldData.results);
 
-    // Use USD products only for avg price calculation
-    let avgSoldPrice = 0;
-    if (soldData.products && soldData.products.length > 0) {
-      const usdProducts = soldData.products.filter(p => p.currency === 'USD' || p.currency === '$');
-      if (usdProducts.length > 0) {
-        const prices = usdProducts.map(p => parseFloat(p.sale_price)).filter(p => p > 0);
-        avgSoldPrice = prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0;
-        console.log('USD products:', usdProducts.length, 'avg:', avgSoldPrice.toFixed(2));
-      } else {
-        // Fall back to API average_price if no USD products found
-        avgSoldPrice = parseFloat(soldData.average_price || 0);
-        console.log('No USD products, using API avg:', avgSoldPrice);
-      }
+    // ── Full debug dump so we can see the real shape once ─────────────────────
+    console.log('=== RapidAPI RAW RESPONSE ===');
+    console.log('Top-level keys:', Object.keys(soldData));
+    console.log('average_price:', soldData.average_price);
+    console.log('total_results:', soldData.total_results);
+    // "results" might be a count OR an array — log both type and value
+    console.log('results (type):', typeof soldData.results, '| value:', Array.isArray(soldData.results) ? `array[${soldData.results.length}]` : soldData.results);
+    console.log('products (type):', typeof soldData.products, '| count:', Array.isArray(soldData.products) ? soldData.products.length : 'n/a');
+    // Log first item of whichever array exists so we can see field names
+    const sampleArray = soldData.products || soldData.results || soldData.items || [];
+    if (Array.isArray(sampleArray) && sampleArray.length > 0) {
+      console.log('Sample item keys:', Object.keys(sampleArray[0]));
+      console.log('Sample item:', JSON.stringify(sampleArray[0]));
     }
-    const soldCount = parseInt(soldData.total_results || soldData.results || 0);
+    console.log('=============================');
 
-    // Get active US-only listing count
+    // ── Resolve the items array — handle every known field name ───────────────
+    // RapidAPI has returned: products[], results[], items[] across different versions
+    const itemsArray = Array.isArray(soldData.products) ? soldData.products
+                     : Array.isArray(soldData.results)  ? soldData.results
+                     : Array.isArray(soldData.items)    ? soldData.items
+                     : [];
+
+    // ── Sold count ────────────────────────────────────────────────────────────
+    // total_results is the authoritative count; fall back to items array length
+    const soldCount = (() => {
+      const raw = soldData.total_results ?? soldData.totalResults ?? soldData.total;
+      if (raw !== undefined && raw !== null) {
+        const n = parseInt(raw, 10);
+        if (!isNaN(n)) return n;
+      }
+      return itemsArray.length; // last resort
+    })();
+
+    // ── Average sold price ────────────────────────────────────────────────────
+    let avgSoldPrice = 0;
+
+    if (itemsArray.length > 0) {
+      // Filter to USD only; tolerate currency stored as 'USD', '$', or missing (assume USD when site_id=0)
+      const usdItems = itemsArray.filter(p => {
+        const c = (p.currency || p.Currency || '').toString().toUpperCase();
+        return c === 'USD' || c === '$' || c === '';
+      });
+      console.log(`Items total: ${itemsArray.length} | USD items: ${usdItems.length}`);
+
+      // Price field varies: sale_price, price, sold_price, currentPrice, sellingStatus…
+      const prices = usdItems
+        .map(p => {
+          const raw = p.sale_price ?? p.price ?? p.sold_price ?? p.currentPrice ?? p.sellingStatus?.currentPrice?.value;
+          return parseFloat(raw);
+        })
+        .filter(p => !isNaN(p) && p > 0);
+
+      console.log(`Valid prices found: ${prices.length} | sample: ${prices.slice(0, 5)}`);
+
+      if (prices.length > 0) {
+        avgSoldPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+        console.log(`Computed avg from items: $${avgSoldPrice.toFixed(2)}`);
+      } else {
+        // Items exist but no parseable prices — fall back to API-level average
+        avgSoldPrice = parseFloat(soldData.average_price || 0);
+        console.log(`No parseable prices in items; using API average_price: $${avgSoldPrice}`);
+      }
+    } else {
+      // No items array at all — use the API-level average
+      avgSoldPrice = parseFloat(soldData.average_price || 0);
+      console.log(`No items array; using API average_price: $${avgSoldPrice}`);
+    }
+
+    // ── Active listing count (eBay Browse API, US only) ───────────────────────
     let activeCount = 0;
     try {
       const token = await getEbayToken();
@@ -72,12 +123,15 @@ app.post('/ebay', async (req, res) => {
         { headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
       );
       const activeData = await activeRes.json();
-      activeCount = parseInt(activeData.total || 0);
-    } catch(e) {
+      activeCount = parseInt(activeData.total || 0, 10);
+    } catch (e) {
       console.log('Active count error:', e.message);
     }
 
-    const sellThru = activeCount > 0 ? soldCount / activeCount : (soldCount > 0 ? 999 : 0);
+    // ── Sell-through rate ─────────────────────────────────────────────────────
+    const sellThru = activeCount > 0 ? soldCount / activeCount
+                   : soldCount > 0   ? 999
+                   : 0;
 
     const result = {
       avgSoldPrice: parseFloat(avgSoldPrice.toFixed(2)),
@@ -88,8 +142,9 @@ app.post('/ebay', async (req, res) => {
       hasData: soldCount > 0 || activeCount > 0
     };
 
-    console.log(`Result: avg=$${result.avgSoldPrice} sold=${soldCount} active=${activeCount} sellThru=${(sellThru*100).toFixed(0)}%`);
+    console.log(`✅ Final: avg=$${result.avgSoldPrice} sold=${soldCount} active=${activeCount} sellThru=${(sellThru * 100).toFixed(0)}%`);
     res.json(result);
+
   } catch (err) {
     console.error('Error:', err.message);
     res.status(500).json({ error: err.message });
