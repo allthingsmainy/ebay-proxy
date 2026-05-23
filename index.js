@@ -42,32 +42,44 @@ function normalizeModel(str) {
   return str.replace(/\b(RC|RMT|AKB|BN59|XRT|RAV|EUR|FSR|CT)\s(\w)/gi, '$1-$2');
 }
 
-// Get active listing count using eBay Finding API
-async function getActiveCount(searchTerm) {
+async function scrapeEbayCount(searchTerm) {
   try {
-    const url = `https://svcs.ebay.com/services/search/FindingService/v1` +
-      `?OPERATION-NAME=findItemsAdvanced` +
-      `&SERVICE-VERSION=1.0.0` +
-      `&SECURITY-APPNAME=${process.env.EBAY_APP_ID}` +
-      `&RESPONSE-DATA-FORMAT=JSON` +
-      `&REST-PAYLOAD` +
-      `&keywords=${encodeURIComponent('"' + searchTerm + '"')}` +
-      `&itemFilter(0).name=ListingType&itemFilter(0).value=FixedPrice` +
-      `&itemFilter(1).name=Condition&itemFilter(1).value=Used` +
-      `&itemFilter(2).name=LocatedIn&itemFilter(2).value=US` +
-      `&paginationInput.entriesPerPage=1` +
-      `&paginationInput.pageNumber=1`;
+    const quoted = '"' + searchTerm + '"';
+    const url = 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(quoted) + '&LH_BIN=1&_sacat=0';
+    console.log('Scraping URL:', url);
+    const res = await fetch(url, {
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    const html = await res.text();
+    console.log('Scrape status:', res.status, '| HTML length:', html.length);
 
-    const res = await fetch(url);
-    const data = await res.json();
-    const total = parseInt(
-      data?.findItemsAdvancedResponse?.[0]?.paginationOutput?.[0]?.totalEntries?.[0] || 0,
-      10
-    );
-    console.log(`Finding API active count for "${searchTerm}": ${total}`);
-    return total;
+    const patterns = [
+      /(\d[\d,]+)\s+results?\s+for/i,
+      /(\d[\d,]+)\s+result/i,
+      /"totalCount":(\d+)/,
+      /itemCount":(\d+)/,
+      /"total":(\d+)/,
+    ];
+    for (const p of patterns) {
+      const m = html.match(p);
+      if (m) {
+        const n = parseInt(m[1].replace(/,/g, ''), 10);
+        if (!isNaN(n) && n > 0) {
+          console.log('Scraped count:', n);
+          return n;
+        }
+      }
+    }
+    console.log('Could not parse count. Sample:', html.slice(0, 200));
+    return null;
   } catch (e) {
-    console.log('Finding API error:', e.message);
+    console.log('Scrape error:', e.message);
     return null;
   }
 }
@@ -134,8 +146,8 @@ app.post('/ebay', async (req, res) => {
 
     console.log(`Sold: ${soldCount} | Avg: $${avgSoldPrice.toFixed(2)}`);
 
-    // ── Active count via Finding API ──────────────────────────────────────────
-    let activeCount = await getActiveCount(activeSearch) ?? 0;
+    // ── Active count — scrape eBay with quoted exact match ────────────────────
+    let activeCount = await scrapeEbayCount(activeSearch) ?? 0;
 
     const sellThru = activeCount > 0 ? soldCount / activeCount
                    : soldCount > 0   ? 999
