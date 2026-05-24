@@ -31,9 +31,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'SF Pro Display', sans-serif; overflow: hidden; }
-  
   .app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; max-width: 480px; margin: 0 auto; }
-  
   .header { padding: 52px 20px 16px; background: var(--bg); }
   .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .app-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
@@ -48,7 +46,6 @@
   .tab.active { background: var(--text); color: #000; border-color: var(--text); }
   .content { flex: 1; overflow-y: auto; padding: 0 20px 40px; -webkit-overflow-scrolling: touch; }
   .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-  
   .label { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
   .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
   input[type=text], input[type=password] {
@@ -99,6 +96,7 @@
   .test-row { display: flex; gap: 8px; }
   .empty { text-align: center; padding: 32px 0; font-size: 13px; color: var(--text3); }
   .info-note { font-size: 11px; color: var(--text3); line-height: 1.6; margin-top: 8px; }
+  .warning-box { background: #1a1200; border: 0.5px solid #4a3500; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; font-size: 12px; color: #f0a500; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -108,7 +106,7 @@
       <div class="app-title">Remote<span>Scanner</span></div>
       <div class="status-pills">
         <div class="pill" id="invPill"><div class="dot"></div><span id="invPillText">No inventory</span></div>
-        <div class="pill active" id="ebayPill"><div class="dot"></div><span>eBay live</span></div>
+        <div class="pill" id="ebayPill"><div class="dot"></div><span id="ebayPillText">Checking...</span></div>
       </div>
     </div>
     <div class="tab-bar">
@@ -120,6 +118,9 @@
   <div class="content">
     <!-- SCANNER TAB -->
     <div id="tab-scan">
+      <div id="loginWarning" class="warning-box" style="display:none;">
+        ⚠️ Not logged into eBay. <a href="https://www.ebay.com/signin" target="_blank" style="color:#f0a500;">Tap here to log in</a>, then come back and scan.
+      </div>
       <div class="card">
         <div class="label">Model number</div>
         <div class="input-row">
@@ -146,12 +147,22 @@
         <input type="file" id="csvFile" accept=".csv" onchange="handleCSV(event)" />
       </div>
       <div class="card">
-        <div class="label">RapidAPI key</div>
-        <div class="input-row" style="margin-bottom:10px;">
-          <input type="password" id="rapidKeyInput" placeholder="Paste your RapidAPI key..." />
+        <div class="label">Thresholds</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;color:var(--text2);">Min avg sold price ($)</span>
+            <input type="text" id="minPrice" style="width:80px;flex:none;" value="15" />
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;color:var(--text2);">Min sell-through (%)</span>
+            <input type="text" id="minSellThru" style="width:80px;flex:none;" value="20" />
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;color:var(--text2);">Min sold count (90d)</span>
+            <input type="text" id="minSold" style="width:80px;flex:none;" value="3" />
+          </div>
         </div>
-        <button class="btn" style="width:100%;" onclick="saveRapidKey()">✓ Save key</button>
-        <p class="info-note">Your key is stored on this device only. Get it free at rapidapi.com — subscribe to "eBay Average Selling Price" by ecommet.</p>
+        <button class="btn" style="width:100%;margin-top:12px;" onclick="saveThresholds()">✓ Save thresholds</button>
       </div>
       <div class="card">
         <div class="label">Voice</div>
@@ -160,13 +171,12 @@
           <select id="voiceSelect"></select>
         </div>
         <div class="test-row">
-          <button class="btn btn-sm" onclick="speak('Multi')">🔊 Test "Multi"</button>
           <button class="btn btn-sm" onclick="speak('New')">🔊 Test "New"</button>
+          <button class="btn btn-sm" onclick="speak('Multi')">🔊 Test "Multi"</button>
         </div>
       </div>
       <div class="card">
         <div class="label">Scheduled listings</div>
-        <p style="font-size:13px;color:var(--text2);margin-bottom:10px;">Add model numbers for remotes you have scheduled.</p>
         <div class="input-row">
           <input type="text" id="schedInput" placeholder="Model number..." autocorrect="off" autocapitalize="characters" />
           <button class="btn btn-sm" onclick="addScheduled()">+ Add</button>
@@ -184,27 +194,64 @@
 </div>
 <script>
 let inventory = [], scheduled = [], history = [], selectedVoice = null;
-let RAPID_KEY = localStorage.getItem('rapidKey') || '';
-// Init
+
+// Thresholds
+let thresholds = JSON.parse(localStorage.getItem('thresholds') || '{"minPrice":15,"minSellThru":20,"minSold":3}');
+
 window.addEventListener('load', () => {
   populateVoices();
-  if (RAPID_KEY) document.getElementById('rapidKeyInput').value = RAPID_KEY;
+  loadThresholdInputs();
   const savedInv = localStorage.getItem('invSummary');
-  if (savedInv) {
-    const s = JSON.parse(savedInv);
-    inventory = s.items || [];
-    updateInvPill(inventory.length);
-  }
+  if (savedInv) { const s = JSON.parse(savedInv); inventory = s.items || []; updateInvPill(inventory.length); }
   const savedSched = localStorage.getItem('scheduled');
   if (savedSched) { scheduled = JSON.parse(savedSched); renderSched(); }
   const savedHistory = localStorage.getItem('scanHistory');
   if (savedHistory) { history = JSON.parse(savedHistory); renderHistory(); }
+  checkEbayLogin();
 });
-function saveRapidKey() {
-  RAPID_KEY = document.getElementById('rapidKeyInput').value.trim();
-  localStorage.setItem('rapidKey', RAPID_KEY);
-  alert('Key saved!');
+
+function loadThresholdInputs() {
+  document.getElementById('minPrice').value = thresholds.minPrice;
+  document.getElementById('minSellThru').value = thresholds.minSellThru;
+  document.getElementById('minSold').value = thresholds.minSold;
 }
+
+function saveThresholds() {
+  thresholds = {
+    minPrice: parseFloat(document.getElementById('minPrice').value) || 15,
+    minSellThru: parseFloat(document.getElementById('minSellThru').value) || 20,
+    minSold: parseInt(document.getElementById('minSold').value) || 3
+  };
+  localStorage.setItem('thresholds', JSON.stringify(thresholds));
+  alert('Thresholds saved!');
+}
+
+// Check if logged into eBay
+async function checkEbayLogin() {
+  try {
+    const res = await fetch('https://www.ebay.com/sh/research/api/search?marketplace=EBAY-US&keywords=test&dayRange=7&tabName=SOLD&modules=aggregates', {
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const pill = document.getElementById('ebayPill');
+      pill.className = 'pill active';
+      document.getElementById('ebayPillText').textContent = 'Terapeak live';
+      document.getElementById('loginWarning').style.display = 'none';
+    } else {
+      showLoginWarning();
+    }
+  } catch(e) {
+    showLoginWarning();
+  }
+}
+
+function showLoginWarning() {
+  const pill = document.getElementById('ebayPill');
+  pill.className = 'pill';
+  document.getElementById('ebayPillText').textContent = 'Not logged in';
+  document.getElementById('loginWarning').style.display = 'block';
+}
+
 // Voice
 function populateVoices() {
   const voices = window.speechSynthesis.getVoices();
@@ -213,18 +260,14 @@ function populateVoices() {
   sel.innerHTML = '';
   const en = voices.filter(v => v.lang.startsWith('en'));
   const list = en.length ? en : voices;
-  list.forEach((v, i) => {
-    const o = document.createElement('option');
-    o.value = i; o.textContent = `${v.name} (${v.lang})`;
-    sel.appendChild(o);
-  });
-  const pref = list.find(v => /samantha|karen|daniel|moira|siri/i.test(v.name))
-    || list.find(v => v.localService && v.lang === 'en-US') || list[0];
+  list.forEach((v, i) => { const o = document.createElement('option'); o.value = i; o.textContent = v.name + ' (' + v.lang + ')'; sel.appendChild(o); });
+  const pref = list.find(v => /samantha|karen|daniel|moira|siri/i.test(v.name)) || list.find(v => v.localService && v.lang === 'en-US') || list[0];
   sel.value = list.indexOf(pref) >= 0 ? list.indexOf(pref) : 0;
   selectedVoice = list[parseInt(sel.value)];
   sel.onchange = () => { selectedVoice = list[parseInt(sel.value)]; };
 }
 window.speechSynthesis.onvoiceschanged = populateVoices;
+
 function speak(text) {
   try {
     window.speechSynthesis.cancel();
@@ -234,6 +277,7 @@ function speak(text) {
     window.speechSynthesis.speak(u);
   } catch(e) {}
 }
+
 function playBuzz() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -245,6 +289,7 @@ function playBuzz() {
     o.start(); o.stop(ctx.currentTime + 0.45);
   } catch(e) {}
 }
+
 // CSV
 function handleCSV(e) {
   const file = e.target.files[0]; if (!file) return;
@@ -255,15 +300,16 @@ function handleCSV(e) {
     localStorage.setItem('invSummary', JSON.stringify({ items: inventory }));
     updateInvPill(inventory.length);
     document.getElementById('uploadZone').className = 'upload-zone loaded';
-    document.getElementById('uploadText').textContent = `✓ ${inventory.length} items loaded`;
+    document.getElementById('uploadText').textContent = '✓ ' + inventory.length + ' items loaded';
   };
   reader.readAsText(file);
 }
+
 function updateInvPill(count) {
-  const pill = document.getElementById('invPill');
-  pill.className = 'pill active';
-  document.getElementById('invPillText').textContent = `${count} items`;
+  document.getElementById('invPill').className = 'pill active';
+  document.getElementById('invPillText').textContent = count + ' items';
 }
+
 // Scheduled
 function addScheduled() {
   const val = document.getElementById('schedInput').value.trim().toUpperCase();
@@ -273,20 +319,13 @@ function addScheduled() {
   localStorage.setItem('scheduled', JSON.stringify(scheduled));
   renderSched();
 }
-function removeScheduled(m) {
-  scheduled = scheduled.filter(x => x !== m);
-  localStorage.setItem('scheduled', JSON.stringify(scheduled));
-  renderSched();
-}
+function removeScheduled(m) { scheduled = scheduled.filter(x => x !== m); localStorage.setItem('scheduled', JSON.stringify(scheduled)); renderSched(); }
 function renderSched() {
   const el = document.getElementById('schedList');
   if (!scheduled.length) { el.innerHTML = ''; return; }
-  el.innerHTML = scheduled.map(m => `
-    <div class="sched-item">
-      <span style="font-family:monospace;font-size:13px;">${m}</span>
-      <button class="btn btn-sm" onclick="removeScheduled('${m}')">remove</button>
-    </div>`).join('');
+  el.innerHTML = scheduled.map(m => '<div class="sched-item"><span style="font-family:monospace;font-size:13px;">' + m + '</span><button class="btn btn-sm" onclick="removeScheduled(\'' + m + '\')">remove</button></div>').join('');
 }
+
 // Tabs
 function switchTab(tab) {
   ['scan','setup','history'].forEach((t,i) => {
@@ -294,10 +333,11 @@ function switchTab(tab) {
     document.querySelectorAll('.tab')[i].className = 'tab'+(t===tab?' active':'');
   });
 }
+
 // Brand detection
 const BRANDS = [
   { p: /^AA59[-\s]?\d+/i, b: 'Samsung' }, { p: /^BN59[-\s]?\d+/i, b: 'Samsung' },
-  { p: /^TM\d{4}/i, b: 'Samsung' }, { p: /^0{2,3}\d{2,3}[A-Z]$/i, b: 'Samsung' },
+  { p: /^TM\d{4}/i, b: 'Samsung' },
   { p: /^RMT/i, b: 'Sony' }, { p: /^RM-/i, b: 'Sony' },
   { p: /^CT[-\s]?\d+/i, b: 'Toshiba' },
   { p: /^AKB\d+/i, b: 'LG' }, { p: /^AGF\d+/i, b: 'LG' }, { p: /^MKJ\d+/i, b: 'LG' },
@@ -307,56 +347,105 @@ const BRANDS = [
   { p: /^RM[-\s]?SDR/i, b: 'JVC' }, { p: /^RM[-\s]?C\d{4}/i, b: 'JVC' },
   { p: /^GXB[A-Z]/i, b: 'Sanyo' }, { p: /^MME\d+/i, b: 'Magnavox' },
   { p: /^XRT\d+/i, b: 'Vizio' }, { p: /^MVD\d+/i, b: 'Memorex' },
-  { p: /^BW\d+/i, b: 'Bionaire' }, { p: /^SUN\d+/i, b: 'DeLonghi' },
-  { p: /^A\d{4}$/i, b: 'Apple' },
   { p: /^RC-?\d{4}/i, b: 'Denon' },
-  { p: /^RC\d{2}[A-Z]{0,2}$/i, b: 'DirecTV' }, { p: /^RC8[0-9]/i, b: 'DirecTV' },
   { p: /^XR\d+/i, b: 'Xfinity' }, { p: /^21\d{4}/i, b: 'Dish' },
 ];
 function detectBrand(m) { for (const e of BRANDS) { if (e.p.test(m)) return e.b; } return null; }
 function formatModel(m) {
   const brand = detectBrand(m);
   const clean = m.toUpperCase().replace(/[-]/g,' ').replace(/\s+/g,' ').trim();
-  return brand ? `${brand} ${clean}` : clean;
+  return brand ? brand + ' ' + clean : clean;
 }
-// eBay lookup via proxy server
+
+// Terapeak API call — direct from browser using eBay session
+async function fetchTerapeak(keywords, tabName) {
+  const now = Date.now();
+  const ninetyDaysAgo = now - (90 * 24 * 60 * 60 * 1000);
+  const params = new URLSearchParams({
+    marketplace: 'EBAY-US',
+    keywords,
+    dayRange: '90',
+    endDate: now.toString(),
+    startDate: ninetyDaysAgo.toString(),
+    categoryId: '61312',
+    offset: '0',
+    limit: '50',
+    tabName,
+    tz: 'America/Los_Angeles',
+  });
+  params.append('modules', 'aggregates');
+  params.append('modules', 'resultsHeader');
+
+  const res = await fetch('https://www.ebay.com/sh/research/api/search?' + params.toString(), {
+    credentials: 'include',
+    headers: {
+      'Accept': '*/*',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Referer': 'https://www.ebay.com/sh/research'
+    }
+  });
+
+  if (!res.ok) return null;
+
+  const text = await res.text();
+  const lines = text.trim().split('\n').filter(Boolean);
+  const modules = {};
+  for (const line of lines) {
+    try { const obj = JSON.parse(line); if (obj.meta?.name) modules[obj.meta.name] = obj; } catch(e) {}
+  }
+  return modules;
+}
+
+function parseAggregates(modules) {
+  const agg = modules?.aggregates;
+  if (!agg?.sections) return null;
+  let avgPrice = 0, soldCount = 0, sellThru = 0;
+  for (const section of agg.sections) {
+    for (const item of section.dataItems || []) {
+      const header = item.header?.textSpans?.[0]?.text || '';
+      const value = item.value?.textSpans?.[0]?.text || '';
+      const clean = value.replace(/[$,%]/g,'').replace(/,/g,'').trim();
+      if (header === 'Avg sold price') avgPrice = parseFloat(clean) || 0;
+      if (header === 'Total sold') soldCount = parseInt(clean) || 0;
+      if (header === 'Sell-through') sellThru = parseFloat(clean) || 0;
+      if (header === 'Total listings') soldCount = soldCount || parseInt(clean) || 0;
+    }
+  }
+  return { avgPrice, soldCount, sellThru };
+}
+
 async function fetchEbayData(model) {
   try {
-    const res = await fetch('https://ebay-proxy-nc6j.onrender.com/ebay', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        keywords: (detectBrand(model) ? detectBrand(model) + ' ' + model : model + ' remote control'),
-        excluded_keywords: 'lot wholesale parts broken',
-        max_search_results: '60',
-        remove_outliers: 'false',
-        site_id: '0'
-      })
-    });
-    const d = await res.json();
-    console.log('eBay response:', JSON.stringify(d));
-    if (!d || res.status >= 400) return null;
+    const brand = detectBrand(model);
+    const hasBrand = brand && model.toUpperCase().startsWith(brand.toUpperCase());
+    const searchTerm = (brand && !hasBrand) ? brand + ' ' + model : model;
 
-    // ── FIX: read the field names the server actually sends ──────────────────
-    const avgSoldPrice = parseFloat(d.avgSoldPrice || 0);
-    const soldCount    = parseInt(d.soldCount    || 0, 10);
-    const activeCount  = parseInt(d.activeCount  || 0, 10);
-    const sellThru     = parseFloat(d.sellThru   || 0);
-    // ────────────────────────────────────────────────────────────────────────
+    const [soldModules, activeModules] = await Promise.all([
+      fetchTerapeak(searchTerm, 'SOLD'),
+      fetchTerapeak(searchTerm, 'ACTIVE')
+    ]);
 
-    return {
-      avgSoldPrice,
-      soldCount,
-      activeCount,
-      totalCount: soldCount + activeCount,
-      sellThru,
-      hasData: d.hasData || avgSoldPrice > 0 || soldCount > 0 || activeCount > 0
-    };
+    if (!soldModules) return null;
+
+    const soldData = parseAggregates(soldModules);
+    const activeData = parseAggregates(activeModules);
+
+    if (!soldData) return null;
+
+    const soldCount = soldData.soldCount;
+    const avgSoldPrice = soldData.avgPrice;
+    const activeCount = activeData?.soldCount || 0;
+    const sellThru = activeCount > 0 ? (soldCount / activeCount) * 100 : (soldCount > 0 ? 9999 : 0);
+
+    console.log('Terapeak sold:', soldCount, 'avg:', avgSoldPrice, 'active:', activeCount, 'sellThru:', sellThru.toFixed(0) + '%');
+
+    return { avgSoldPrice, soldCount, activeCount, sellThru, hasData: soldCount > 0 || activeCount > 0 };
   } catch(e) {
-    console.error('eBay fetch error:', e);
+    console.error('Terapeak error:', e);
     return null;
   }
 }
+
 // Main scan
 async function runScan() {
   const raw = document.getElementById('modelInput').value.trim();
@@ -364,44 +453,50 @@ async function runScan() {
   const model = raw.toUpperCase();
   const btn = document.getElementById('scanBtn');
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Checking eBay...';
+  btn.innerHTML = '<div class="spinner"></div> Checking...';
   document.getElementById('resultBox').className = 'result-box hidden';
-  // Load voices if needed
+
   if (!window.speechSynthesis.getVoices().length) {
     await new Promise(r => { window.speechSynthesis.onvoiceschanged = r; setTimeout(r, 600); });
     populateVoices();
   }
-  // Check inventory first (instant)
+
+  // Check inventory first
   const matches = inventory.filter(i => i.title.toUpperCase().includes(model));
   const multiMatch = matches.find(i => i.qty > 1);
   const isScheduled = scheduled.includes(model);
-  if (multiMatch) { fire('green','Multi-quantity', model, `Qty ${multiMatch.qty} listing in inventory`, 'multi'); reset(btn); return; }
+  if (multiMatch) { fire('green','Multi-quantity', model, 'Qty ' + multiMatch.qty + ' listing in inventory', 'multi'); reset(btn); return; }
   if (isScheduled) { fire('green','Scheduled', model, 'In your scheduled listings', 'new'); reset(btn); return; }
-  // eBay lookup
+
   const ebay = await fetchEbayData(model);
+
   let signal='red', label='Pass', sound='buzz', sub='';
+
   if (!ebay || !ebay.hasData) {
     signal='green'; label='New listing'; sound='new'; sub='No eBay listings found — untapped opportunity';
   } else {
-    const { avgSoldPrice, soldCount, activeCount: ebayActive, sellThru } = ebay;
-    if (soldCount===0 && ebay.totalCount===0) {
-      signal='green'; label='New listing'; sound='new'; sub='No eBay listings found';
-    } else if (soldCount>0 && avgSoldPrice>=20 && sellThru>=0.05) {
-      signal='green'; label='New listing'; sound='new'; sub=`Avg sold $${avgSoldPrice.toFixed(2)} · ${(sellThru*100).toFixed(0)}% sell-through`;
-    } else if (soldCount>0 && avgSoldPrice<20 && sellThru>=0.10) {
-      signal='green'; label='New listing'; sound='new'; sub=`Avg sold $${avgSoldPrice.toFixed(2)} · ${(sellThru*100).toFixed(0)}% sell-through`;
-    } else if (soldCount===0 && avgSoldPrice>=50) {
-      signal='green'; label='New listing'; sound='new'; sub=`Listed avg $${avgSoldPrice.toFixed(2)} · none sold yet`;
-    } else if (soldCount===0 && ebay.totalCount>0 && avgSoldPrice<50) {
-      signal='red'; label='Pass'; sound='buzz'; sub=`Listed avg $${avgSoldPrice.toFixed(2)} · none sold · under $50`;
+    const { avgSoldPrice, soldCount, activeCount, sellThru } = ebay;
+    const meetsPrice = avgSoldPrice >= thresholds.minPrice;
+    const meetsSellThru = sellThru >= thresholds.minSellThru;
+    const meetsSold = soldCount >= thresholds.minSold;
+
+    if (meetsPrice && meetsSellThru && meetsSold) {
+      signal='green'; label='New listing'; sound='new';
+      sub = 'Avg $' + avgSoldPrice.toFixed(2) + ' · ' + soldCount + ' sold · ' + sellThru.toFixed(0) + '% sell-through';
     } else {
       signal='red'; label='Pass'; sound='buzz';
-      sub = soldCount>0 ? `Avg sold $${avgSoldPrice.toFixed(2)} · ${(sellThru*100).toFixed(0)}% sell-through` : 'Does not meet criteria';
+      const reasons = [];
+      if (!meetsPrice) reasons.push('$' + avgSoldPrice.toFixed(2) + ' avg (min $' + thresholds.minPrice + ')');
+      if (!meetsSellThru) reasons.push(sellThru.toFixed(0) + '% sell-through (min ' + thresholds.minSellThru + '%)');
+      if (!meetsSold) reasons.push(soldCount + ' sold (min ' + thresholds.minSold + ')');
+      sub = reasons.join(' · ');
     }
   }
+
   fire(signal, label, model, sub, sound);
   reset(btn);
 }
+
 function fire(signal, label, model, sub, sound) {
   const name = formatModel(model);
   const box = document.getElementById('resultBox');
@@ -418,23 +513,15 @@ function fire(signal, label, model, sub, sound) {
   localStorage.setItem('scanHistory', JSON.stringify(history));
   renderHistory();
 }
-function reset(btn) {
-  btn.disabled = false;
-  btn.innerHTML = '⚡ Scan & Check';
-}
+
+function reset(btn) { btn.disabled = false; btn.innerHTML = '⚡ Scan & Check'; }
+
 function renderHistory() {
   const el = document.getElementById('historyList');
   if (!history.length) { el.innerHTML = '<div class="empty">No scans yet</div>'; return; }
-  el.innerHTML = history.map(h => `
-    <div class="history-item">
-      <div class="h-badge ${h.signal}">${h.signal==='green'?'✅':'❌'}</div>
-      <div style="flex:1;min-width:0;">
-        <div class="h-model">${h.name}</div>
-        <div class="h-signal">${h.label} · ${h.sub}</div>
-      </div>
-      <div class="h-time">${h.time}</div>
-    </div>`).join('');
+  el.innerHTML = history.map(h => '<div class="history-item"><div class="h-badge ' + h.signal + '">' + (h.signal==='green'?'✅':'❌') + '</div><div style="flex:1;min-width:0;"><div class="h-model">' + h.name + '</div><div class="h-signal">' + h.label + ' · ' + h.sub + '</div></div><div class="h-time">' + h.time + '</div></div>').join('');
 }
+
 document.getElementById('modelInput').addEventListener('keydown', e => { if (e.key==='Enter') runScan(); });
 </script>
 </body>
