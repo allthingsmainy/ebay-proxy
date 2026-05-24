@@ -12,17 +12,6 @@ app.use((req, res, next) => {
   next();
 });
 
-async function getEbayToken() {
-  const credentials = Buffer.from(`${process.env.EBAY_APP_ID}:${process.env.EBAY_CERT_ID}`).toString('base64');
-  const r = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
-    method: 'POST',
-    headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope'
-  });
-  const d = await r.json();
-  return d.access_token;
-}
-
 function detectBrand(model) {
   const m = model.toUpperCase()
     .replace(/^(DENON|SONY|SAMSUNG|LG|YAMAHA|PANASONIC|VIZIO|TOSHIBA|PHILIPS|JVC|SANYO|MAGNAVOX|MEMOREX|XFINITY|DISH)\s+/, '');
@@ -38,117 +27,118 @@ function detectBrand(model) {
   return null;
 }
 
-function normalizeModel(str) {
-  return str.replace(/\b(RC|RMT|AKB|BN59|XRT|RAV|EUR|FSR|CT)\s(\w)/gi, '$1-$2');
-}
+async function queryTerapeak(keywords, tabName) {
+  const now = Date.now();
+  const ninetyDaysAgo = now - (90 * 24 * 60 * 60 * 1000);
 
-async function scrapeEbayCount(searchTerm) {
-  try {
-    const quoted = '"' + searchTerm + '"';
-    const url = 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(quoted) + '&LH_BIN=1&_sacat=0';
-    console.log('Scraping URL:', url);
-    const res = await fetch(url, {
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    const html = await res.text();
-    console.log('Scrape status:', res.status, '| HTML length:', html.length);
+  const params = new URLSearchParams({
+    marketplace: 'EBAY-US',
+    keywords,
+    dayRange: '90',
+    endDate: now.toString(),
+    startDate: ninetyDaysAgo.toString(),
+    categoryId: '61312',
+    offset: '0',
+    limit: '50',
+    tabName,
+    tz: 'America/Los_Angeles',
+    modules: 'aggregates',
+  });
+  // modules needs to be repeated
+  params.append('modules', 'searchResults');
+  params.append('modules', 'resultsHeader');
 
-    const patterns = [
-      /(\d[\d,]+)\s+results?\s+for/i,
-      /(\d[\d,]+)\s+result/i,
-      /"totalCount":(\d+)/,
-      /itemCount":(\d+)/,
-      /"total":(\d+)/,
-    ];
-    for (const p of patterns) {
-      const m = html.match(p);
-      if (m) {
-        const n = parseInt(m[1].replace(/,/g, ''), 10);
-        if (!isNaN(n) && n > 0) {
-          console.log('Scraped count:', n);
-          return n;
-        }
-      }
+  const url = `https://www.ebay.com/sh/research/api/search?${params.toString()}`;
+  console.log(`Terapeak ${tabName} query: ${keywords}`);
+
+  const res = await fetch(url, {
+    headers: {
+      'Cookie': process.env.EBAY_COOKIE,
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Referer': 'https://www.ebay.com/sh/research',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15',
+      'X-Requested-With': 'XMLHttpRequest'
     }
-    console.log('Could not parse count. Sample:', html.slice(0, 200));
-    return null;
-  } catch (e) {
-    console.log('Scrape error:', e.message);
+  });
+
+  if (!res.ok) {
+    console.log(`Terapeak ${tabName} HTTP error: ${res.status}`);
     return null;
   }
+
+  // Response is newline-delimited JSON objects
+  const text = await res.text();
+  const lines = text.trim().split('\n').filter(Boolean);
+  const modules = {};
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (obj.meta && obj.meta.name) {
+        modules[obj.meta.name] = obj;
+      }
+    } catch (e) {}
+  }
+  return modules;
+}
+
+function parseAggregates(modules) {
+  const agg = modules?.aggregates;
+  if (!agg || !agg.sections) return null;
+
+  let avgPrice = 0, soldCount = 0, sellThru = 0, activeCount = 0;
+
+  for (const section of agg.sections) {
+    for (const item of section.dataItems || []) {
+      const header = item.header?.textSpans?.[0]?.text || '';
+      const value = item.value?.textSpans?.[0]?.text || '';
+      const clean = value.replace(/[$,%]/g, '').replace(/,/g, '').trim();
+
+      if (header === 'Avg sold price') avgPrice = parseFloat(clean) || 0;
+      if (header === 'Total sold') soldCount = parseInt(clean) || 0;
+      if (header === 'Sell-through') sellThru = parseFloat(clean) / 100 || 0;
+      if (header === 'Total active') activeCount = parseInt(clean) || 0;
+      if (header === 'Total listings') activeCount = parseInt(clean) || 0;
+    }
+  }
+  return { avgPrice, soldCount, sellThru, activeCount };
 }
 
 app.post('/ebay', async (req, res) => {
   try {
     const { keywords } = req.body;
-
     const modelClean = keywords.replace(/\s*remote\s*control$/i, '').trim();
     const brand = detectBrand(modelClean);
     const hasBrand = brand && modelClean.toUpperCase().startsWith(brand.toUpperCase());
-    const brandedSearch = (brand && !hasBrand) ? `${brand} ${modelClean}` : modelClean;
-    const activeSearch = normalizeModel(brandedSearch);
+    const searchTerm = (brand && !hasBrand) ? `${brand} ${modelClean}` : modelClean;
 
-    console.log(`Model: "${modelClean}" | Brand: ${brand} | Active search: "${activeSearch}"`);
+    console.log(`Searching Terapeak for: "${searchTerm}"`);
 
-    // ── RapidAPI sold data ────────────────────────────────────────────────────
-    const soldRes = await fetch('https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-rapidapi-host': 'ebay-average-selling-price.p.rapidapi.com',
-        'x-rapidapi-key': process.env.RAPID_KEY
-      },
-      body: JSON.stringify({
-        keywords: keywords,
-        excluded_keywords: 'lot wholesale parts broken',
-        max_search_results: '240',
-        remove_outliers: 'false',
-        site_id: '0'
-      })
-    });
-    const soldData = await soldRes.json();
+    // Query sold and active in parallel
+    const [soldModules, activeModules] = await Promise.all([
+      queryTerapeak(searchTerm, 'SOLD'),
+      queryTerapeak(searchTerm, 'ACTIVE')
+    ]);
 
-    const itemsArray = Array.isArray(soldData.products) ? soldData.products
-                     : Array.isArray(soldData.results)  ? soldData.results
-                     : Array.isArray(soldData.items)    ? soldData.items
-                     : [];
+    const soldData = parseAggregates(soldModules);
+    const activeData = parseAggregates(activeModules);
 
-    const soldCount = (() => {
-      const raw = soldData.total_results ?? soldData.totalResults ?? soldData.total;
-      if (raw !== undefined && raw !== null) {
-        const n = parseInt(raw, 10);
-        if (!isNaN(n)) return n;
-      }
-      return itemsArray.length;
-    })();
+    console.log('Sold data:', JSON.stringify(soldData));
+    console.log('Active data:', JSON.stringify(activeData));
 
-    let avgSoldPrice = 0;
-    if (itemsArray.length > 0) {
-      const usdItems = itemsArray.filter(p => {
-        const c = (p.currency || '').toString().toUpperCase();
-        return c === 'USD' || c === '$' || c === '';
-      });
-      const prices = usdItems
-        .map(p => parseFloat(p.sale_price ?? p.price ?? p.sold_price ?? 0))
-        .filter(p => !isNaN(p) && p > 0);
-      avgSoldPrice = prices.length
-        ? prices.reduce((a, b) => a + b, 0) / prices.length
-        : parseFloat(soldData.average_price || 0);
-    } else {
-      avgSoldPrice = parseFloat(soldData.average_price || 0);
+    if (!soldData) {
+      return res.status(500).json({ error: 'Could not fetch sold data from Terapeak' });
     }
 
-    console.log(`Sold: ${soldCount} | Avg: $${avgSoldPrice.toFixed(2)}`);
+    const soldCount = soldData.soldCount;
+    const avgSoldPrice = soldData.avgPrice;
 
-    // ── Active count — scrape eBay with quoted exact match ────────────────────
-    let activeCount = await scrapeEbayCount(activeSearch) ?? 0;
+    // Get active count from active tab
+    const activeCount = activeData?.soldCount || activeData?.activeCount || 0;
 
+    // Compute sell-through your way: sold / active * 100
     const sellThru = activeCount > 0 ? soldCount / activeCount
                    : soldCount > 0   ? 999
                    : 0;
